@@ -1,0 +1,220 @@
+# Phase 3A: Fujitsu Protocol Integration - LISTEN ONLY MODE
+# This adds the Fujitsu component but in listen-only mode
+# NO HARDWARE CONNECTED YET - just testing compilation
+
+esphome:
+  name: aircon
+  friendly_name: "Aircon"
+  on_boot:
+    priority: 600
+    then:
+      - logger.log: "Fujitsu Phase 3A - Listen Only Mode"
+      - light.turn_on:
+          id: status_light
+          brightness: 100%
+          effect: "Boot Pattern"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable verbose logging to see protocol details
+logger:
+  level: VERBOSE
+  baud_rate: 115200
+  logs:
+    fujitsu.heatpump: DEBUG
+    fujitsu.climate: DEBUG
+    uart: VERBOSE
+
+# UART for LIN bus communication
+# This is configured but NOT connected to hardware yet in Phase 3A
+uart:
+  id: fuji_uart  
+  tx_pin: GPIO17  # Will connect to linttl3 RX pin in Phase 3B
+  rx_pin: GPIO16  # Will connect to linttl3 TX pin in Phase 3B
+  baud_rate: 500
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+# WiFi
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  
+  ap:
+    ssid: "Aircon-Fallback"
+    password: "fallback123"
+  
+  on_connect:
+    - logger.log: "WiFi Connected!"
+    - light.turn_on:
+        id: status_light
+        brightness: 100%
+        effect: "WiFi Connected"
+  
+  on_disconnect:
+    - logger.log: "WiFi Disconnected!"
+    - light.turn_on:
+        id: status_light
+        brightness: 100%
+        effect: "WiFi Error"
+
+captive_portal:
+
+# Home Assistant API
+api:
+  on_client_connected:
+    - logger.log: "Home Assistant Connected!"
+    - light.turn_on:
+        id: status_light
+        brightness: 100%
+        effect: "HA Connected"
+  
+  on_client_disconnected:
+    - logger.log: "Home Assistant Disconnected!"
+    - light.turn_on:
+        id: status_light
+        brightness: 100%
+        effect: "HA Disconnected"
+
+# OTA updates
+ota:
+  - platform: esphome
+
+# External component - Fujitsu Climate
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [ fujitsu_climate ]
+    refresh: 0s
+
+# Fujitsu Climate Entity
+climate:
+  - platform: fujitsu_climate
+    name: "Fujitsu Heat Pump"
+    id: fujitsu_hp
+    uart_id: fuji_uart
+
+# Status LED with patterns
+light:
+  - platform: status_led
+    id: status_light
+    name: "Status LED"
+    pin:
+      number: GPIO2
+      inverted: false
+    effects:
+      - strobe:
+          name: "Boot Pattern"
+          colors:
+            - state: true
+              duration: 200ms
+            - state: false
+              duration: 200ms
+      
+      - strobe:
+          name: "WiFi Connected"
+          colors:
+            - state: true
+              duration: 100ms
+            - state: false
+              duration: 1900ms
+      
+      - strobe:
+          name: "WiFi Error"
+          colors:
+            - state: true
+              duration: 200ms
+            - state: false
+              duration: 200ms
+      
+      - strobe:
+          name: "HA Connected"
+          colors:
+            - state: true
+              duration: 500ms
+            - state: false
+              duration: 1500ms
+      
+      - strobe:
+          name: "HA Disconnected"
+          colors:
+            - state: true
+              duration: 300ms
+            - state: false
+              duration: 700ms
+
+# Web server
+web_server:
+  port: 80
+  version: 3
+
+# Diagnostic sensors
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    id: wifi_signal_sensor
+    update_interval: 30s
+
+  - platform: uptime
+    name: "Uptime"
+    id: uptime_sensor
+    update_interval: 60s
+
+  - platform: template
+    name: "Free Heap Memory"
+    lambda: return heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    unit_of_measurement: "bytes"
+    update_interval: 60s
+    entity_category: diagnostic
+
+# Text sensors
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      id: ip_address
+    ssid:
+      name: "WiFi SSID"
+    mac_address:
+      name: "MAC Address"
+
+  - platform: version
+    name: "ESPHome Version"
+
+# Binary sensors
+binary_sensor:
+  - platform: status
+    name: "Status"
+    id: system_status
+
+# Switches
+switch:
+  - platform: restart
+    name: "Restart"
+
+# Buttons
+button:
+  - platform: safe_mode
+    name: "Safe Mode Boot"
+    entity_category: diagnostic
+
+# Diagnostic interval
+interval:
+  - interval: 300s
+    then:
+      - logger.log:
+          format: "Status - WiFi: %.0f dBm, Uptime: %.1f hrs, Heap: %d bytes"
+          args:
+            - 'id(wifi_signal_sensor).state'
+            - 'id(uptime_sensor).state / 3600.0'
+            - 'heap_caps_get_free_size(MALLOC_CAP_INTERNAL)'
+
+# Time
+time:
+  - platform: homeassistant
+    id: homeassistant_time
