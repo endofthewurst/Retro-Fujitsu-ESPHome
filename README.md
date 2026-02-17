@@ -225,18 +225,18 @@ wifi_password: "YourWiFiPassword"
 
 #### 3. Validate Configuration
 ```batch
-esphome config fujitsu_aircon.yaml
+esphome config retrofujitsu.yaml
 ```
 
 #### 4. Flash to ESP32
 **First flash (USB):**
 ```batch
-esphome run fujitsu_aircon.yaml
+esphome run retrofujitsu.yaml
 ```
 
 **Subsequent updates (OTA):**
 ```batch
-esphome run fujitsu_aircon.yaml --device 192.168.x.x
+esphome run retrofujitsu.yaml --device 192.168.x.x
 ```
 
 #### 5. Add to Home Assistant
