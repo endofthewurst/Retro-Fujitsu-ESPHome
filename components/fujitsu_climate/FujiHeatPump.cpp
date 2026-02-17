@@ -83,7 +83,7 @@ bool FujiHeatPump::readFrame() {
     return false;
   }
   
-  return waitForFrame(100);
+  return waitForFrame(20);
 }
 
 void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
