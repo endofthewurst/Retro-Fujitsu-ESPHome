@@ -20,11 +20,8 @@ FujitsuClimate::FujitsuClimate() : PollingComponent(PUBLISH_INTERVAL_MS) {
 }
 
 void FujitsuClimate::setup() {
-  // Try to connect to heat pump; returns true if successful
-  hardware_present_ = hp_.connect(this->parent_, true);
-  
-  // Enable debug logging only if hardware is present
-  hp_.setDebug(hardware_present_);
+  // Connect to heat pump (void; hardware_present_ stays false until frames are seen)
+  hp_.connect(this->parent_, true);
 
   ESP_LOGI(TAG, "Fujitsu Climate initialized. Hardware present: %s",
            hardware_present_ ? "YES" : "NO");
@@ -37,15 +34,15 @@ void FujitsuClimate::setup() {
 
 void FujitsuClimate::update() {
   // Called periodically by PollingComponent (non-blocking)
-  
-  if (!hardware_present_) {
-    // Optional: could attempt to reconnect every N cycles
-    return;
-  }
 
   // Read frame from bus if available
   if (hp_.readFrame()) {
+    hardware_present_ = true;
     update_climate_state();
+  }
+
+  if (!hardware_present_) {
+    return;
   }
 
   // Send any pending commands
@@ -180,10 +177,49 @@ void FujitsuClimate::update_climate_state() {
 }
 
 // Mode and fan mapping functions remain unchanged
-climate::ClimateMode FujitsuClimate::fuji_mode_to_climate_mode(FujiMode mode) { /* ... */ }
-FujiMode FujitsuClimate::climate_mode_to_fuji_mode(climate::ClimateMode mode) { /* ... */ }
-climate::ClimateFanMode FujitsuClimate::fuji_fan_to_climate_fan(FujiFanMode fan) { /* ... */ }
-FujiFanMode FujitsuClimate::climate_fan_to_fuji_fan(climate::ClimateFanMode fan) { /* ... */ }
+climate::ClimateMode FujitsuClimate::fuji_mode_to_climate_mode(FujiMode mode) {
+  switch (mode) {
+    case FujiMode::HEAT:      return climate::CLIMATE_MODE_HEAT;
+    case FujiMode::COOL:      return climate::CLIMATE_MODE_COOL;
+    case FujiMode::DRY:       return climate::CLIMATE_MODE_DRY;
+    case FujiMode::FAN:       return climate::CLIMATE_MODE_FAN_ONLY;
+    case FujiMode::MODE_AUTO: return climate::CLIMATE_MODE_AUTO;
+    default:                  return climate::CLIMATE_MODE_AUTO;
+  }
+}
+
+FujiMode FujitsuClimate::climate_mode_to_fuji_mode(climate::ClimateMode mode) {
+  switch (mode) {
+    case climate::CLIMATE_MODE_HEAT:     return FujiMode::HEAT;
+    case climate::CLIMATE_MODE_COOL:     return FujiMode::COOL;
+    case climate::CLIMATE_MODE_DRY:      return FujiMode::DRY;
+    case climate::CLIMATE_MODE_FAN_ONLY: return FujiMode::FAN;
+    case climate::CLIMATE_MODE_AUTO:     return FujiMode::MODE_AUTO;
+    default:                             return FujiMode::MODE_AUTO;
+  }
+}
+
+climate::ClimateFanMode FujitsuClimate::fuji_fan_to_climate_fan(FujiFanMode fan) {
+  switch (fan) {
+    case FujiFanMode::FAN_AUTO: return climate::CLIMATE_FAN_AUTO;
+    case FujiFanMode::QUIET:    return climate::CLIMATE_FAN_QUIET;
+    case FujiFanMode::FAN_LOW:  return climate::CLIMATE_FAN_LOW;
+    case FujiFanMode::MEDIUM:   return climate::CLIMATE_FAN_MEDIUM;
+    case FujiFanMode::FAN_HIGH: return climate::CLIMATE_FAN_HIGH;
+    default:                    return climate::CLIMATE_FAN_AUTO;
+  }
+}
+
+FujiFanMode FujitsuClimate::climate_fan_to_fuji_fan(climate::ClimateFanMode fan) {
+  switch (fan) {
+    case climate::CLIMATE_FAN_AUTO:   return FujiFanMode::FAN_AUTO;
+    case climate::CLIMATE_FAN_QUIET:  return FujiFanMode::QUIET;
+    case climate::CLIMATE_FAN_LOW:    return FujiFanMode::FAN_LOW;
+    case climate::CLIMATE_FAN_MEDIUM: return FujiFanMode::MEDIUM;
+    case climate::CLIMATE_FAN_HIGH:   return FujiFanMode::FAN_HIGH;
+    default:                          return FujiFanMode::FAN_AUTO;
+  }
+}
 
 }  // namespace fujitsu_climate
 }  // namespace esphome

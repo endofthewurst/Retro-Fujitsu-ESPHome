@@ -79,11 +79,49 @@ bool FujiHeatPump::waitForFrame(uint32_t timeout_ms) {
 }
 
 bool FujiHeatPump::readFrame() {
-  if (!uart_->available()) {
-    return false;
+  // Non-blocking: consume only bytes currently available and assemble 8-byte frames
+  while (uart_->available()) {
+    uint8_t byte;
+    if (!uart_->read_byte(&byte)) break;
+
+    if (rx_index_ == 0) {
+      // Waiting for frame start marker
+      if (byte == FRAME_START) {
+        rx_buffer_[rx_index_++] = byte;
+      } else {
+        if (debug_) {
+          ESP_LOGD(TAG, "Pre-sync byte: 0x%02X", byte);
+        }
+      }
+      continue;
+    }
+
+    // Collecting frame bytes; rx_index_ is always < FRAME_LENGTH here
+    if (rx_index_ >= FRAME_LENGTH) {
+      rx_index_ = 0;  // Safety reset; should not happen
+    }
+    rx_buffer_[rx_index_++] = byte;
+
+    if (rx_index_ >= FRAME_LENGTH) {
+      // Complete frame assembled; reset index for next frame
+      rx_index_ = 0;
+
+      if (rx_buffer_[FRAME_LENGTH - 1] == 0xEB) {
+        if (debug_) {
+          ESP_LOGD(TAG, "Valid frame received");
+        }
+        parseFrame(rx_buffer_, FRAME_LENGTH);
+        last_frame_time_ = millis();
+        return true;
+      } else {
+        if (debug_) {
+          ESP_LOGD(TAG, "Invalid end marker: 0x%02X", rx_buffer_[FRAME_LENGTH - 1]);
+        }
+      }
+    }
   }
-  
-  return waitForFrame(20);
+
+  return false;
 }
 
 void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {

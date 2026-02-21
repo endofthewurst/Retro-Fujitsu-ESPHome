@@ -8,12 +8,13 @@
 namespace esphome {
 namespace fujitsu_climate {
 
-class FujitsuClimate : public climate::Climate, public Component, public uart::UARTDevice {
+class FujitsuClimate : public climate::Climate, public PollingComponent, public uart::UARTDevice {
  public:
-  FujitsuClimate() = default;
+  // Explicit constructor: initialises PollingComponent with the publish interval.
+  FujitsuClimate();
 
   void setup() override;
-  void loop() override;
+  void update() override;
   void dump_config() override;
   
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
@@ -26,6 +27,7 @@ class FujitsuClimate : public climate::Climate, public Component, public uart::U
   
  protected:
   FujiHeatPump hp_;
+  bool hardware_present_{false};
   
   // Update Home Assistant with current state
   void update_climate_state();
@@ -35,10 +37,6 @@ class FujitsuClimate : public climate::Climate, public Component, public uart::U
   FujiMode climate_mode_to_fuji_mode(climate::ClimateMode mode);
   climate::ClimateFanMode fuji_fan_to_climate_fan(FujiFanMode fan);
   FujiFanMode climate_fan_to_fuji_fan(climate::ClimateFanMode fan);
-  
-  // Timing
-  uint32_t last_publish_{0};
-  static const uint32_t PUBLISH_INTERVAL_MS = 5000;
 };
 
 }  // namespace fujitsu_climate
