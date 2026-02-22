@@ -180,7 +180,8 @@ Bit 0: Power (0=Off, 1=On)
 ### Byte 4 Bit Layout
 ```
 Bit 7: Economy mode
-Bits 0-6: Target temperature (°C, direct value)
+Bits 0-6: Target temperature encoded as (°C - 16), valid range 0-14 → 16-30°C
+          Value 0x7F (all bits set) is a sentinel meaning "no setpoint"
 ```
 
 ### Byte 6 Bit Layout
@@ -294,6 +295,45 @@ entity: climate.fujitsu_heat_pump
 - Flash Phase 1 baseline to recover
 - Check for compilation errors
 - Ensure `setup()` doesn't block waiting for UART
+
+---
+
+## Debug Logging
+
+### Enabling Verbose Frame Logs
+
+The Fujitsu component emits raw frame data and bit-field breakdowns at the `DEBUG` log level, gated behind the `debug` flag on the component.  To enable:
+
+```yaml
+# retrofujitsu.yaml
+logger:
+  level: DEBUG   # or VERBOSE for even more detail
+
+fujitsu_climate:
+  - id: aircon
+    # ... other options ...
+    debug: true
+```
+
+With `debug: true` every valid received frame produces three log lines:
+
+```
+[D][fujitsu.heatpump]: Raw frame: FE 21 10 09 06 00 33 EB
+[D][fujitsu.heatpump]:   Byte[3]=0x09  power=1 mode=4 fan=0 err=0
+[D][fujitsu.heatpump]:   Byte[4]=0x06  temp_raw=6 economy=0
+[D][fujitsu.heatpump]:   Byte[6]=0x33  ctrl_temp_raw=25 ctrl_present=1
+```
+
+### Interpreting Raw Frames
+
+| Field | Calculation | Example above |
+|-------|-------------|---------------|
+| Target temp | `(byte4 & 0x7F) + 16` °C | `6 + 16 = 22°C` |
+| Room temp | `(byte6 & 0x7E) >> 1` °C | `(0x33 & 0x7E) >> 1 = 25°C` |
+| Mode | `(byte3 >> 1) & 0x07` | `4 = Heat` |
+| Fan | `(byte3 >> 4) & 0x07` | `0 = Auto` |
+
+A `byte4` value of `0x7F` (all seven bits set) is a sentinel meaning the heat pump has not yet reported a valid setpoint; the component will keep the previous target temperature and log a warning.
 
 ---
 
