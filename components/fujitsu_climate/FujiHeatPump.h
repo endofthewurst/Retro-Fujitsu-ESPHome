@@ -7,9 +7,18 @@ namespace esphome {
 namespace fujitsu_climate {
 
 // Fujitsu protocol frame structure
-// Based on 2017 Hackaday reverse engineering and original FujiHeatPump project
+// Based on 2017 Hackaday reverse engineering and original FujiHeatPump project.
+// Byte 4 (target temp): stored as (°C - 16), valid range 0-14 → 16-30°C.
+// Byte 6 (room temp): bits 1-6 direct °C after right-shift-by-1.
 static const uint8_t FRAME_START = 0xFE;
 static const uint8_t FRAME_LENGTH = 8;
+
+// Target temperature encoding: stored value = (°C - TEMP_OFFSET), range [0, TEMP_RAW_MAX]
+static const uint8_t TEMP_OFFSET = 16;
+static const uint8_t TEMP_RAW_MAX = 14;  // 14 + 16 = 30°C (upper visual limit)
+
+// Sanity ceiling for room-temperature readings
+static const float ROOM_TEMP_MAX_C = 50.0f;
 
 // Controller types
 enum class ControllerType : uint8_t {
