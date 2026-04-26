@@ -1,6 +1,7 @@
-# Phase 3A: Fujitsu Protocol Integration - LISTEN ONLY MODE
-# This adds the Fujitsu component but in listen-only mode
-# NO HARDWARE CONNECTED YET - just testing compilation
+# Phase 3B: Fujitsu Protocol Integration - LISTEN MODE (hardware wired)
+# ESP32 connected as secondary slave on LIN bus via TJA1021/SIT1021T
+# UART on GPIO16 (RX) / GPIO17 (TX), 500 baud 8N1
+# Goal: capture and decode all bus traffic to build protocol map
 
 esphome:
   name: aircon
@@ -8,7 +9,7 @@ esphome:
   on_boot:
     priority: 600
     then:
-      - logger.log: "Fujitsu Phase 3A - Listen Only Mode"
+      - logger.log: "Fujitsu Phase 3B - Listen Mode (hardware wired)"
       - light.turn_on:
           id: status_light
           brightness: 100%
@@ -28,12 +29,16 @@ logger:
     fujitsu.climate: DEBUG
     uart: VERBOSE
 
-# UART for LIN bus communication
-# This is configured but NOT connected to hardware yet in Phase 3A
+# UART for LIN bus communication via TJA1021/SIT1021T transceiver
+# Pull-up on RX pin prevents the floating-pin crash when not wired to bus
 uart:
-  id: fuji_uart  
-  tx_pin: GPIO17  # Will connect to linttl3 RX pin in Phase 3B
-  rx_pin: GPIO16  # Will connect to linttl3 TX pin in Phase 3B
+  id: fuji_uart
+  tx_pin: GPIO17
+  rx_pin:
+    number: GPIO16
+    mode:
+      input: true
+      pullup: true   # Critical: prevents RX float → garbage bytes → crash when bus disconnected
   baud_rate: 500
   data_bits: 8
   parity: NONE
@@ -83,6 +88,12 @@ api:
 # OTA updates
 ota:
   - platform: esphome
+
+# Safe mode: if the device crashes on boot 10 times in a row, it enters a
+# minimal mode (WiFi + OTA only) so you can flash a fix without physical access.
+safe_mode:
+  num_attempts: 10
+  reboot_timeout: 10min
 
 # External component - Fujitsu Climate
 external_components:

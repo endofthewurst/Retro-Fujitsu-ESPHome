@@ -6,8 +6,8 @@ namespace fujitsu_climate {
 
 static const char *const TAG = "fujitsu.climate";
 
-// Poll interval for updating Home Assistant (ms)
-constexpr uint32_t PUBLISH_INTERVAL_MS = 5000;
+// How often to publish state to Home Assistant (ms)
+constexpr uint32_t PUBLISH_INTERVAL_MS = 1000;
 
 FujitsuClimate::FujitsuClimate() : PollingComponent(PUBLISH_INTERVAL_MS) {
   // Initialize defaults for safe discovery
@@ -20,38 +20,36 @@ FujitsuClimate::FujitsuClimate() : PollingComponent(PUBLISH_INTERVAL_MS) {
 }
 
 void FujitsuClimate::setup() {
-  // Connect to heat pump (void; hardware_present_ stays false until frames are seen)
+  // Connect to heat pump driver; enable debug logging for Phase 3B capture
   hp_.connect(this->parent_, true);
+  hp_.setDebug(true);
 
-  ESP_LOGI(TAG, "Fujitsu Climate initialized. Hardware present: %s",
-           hardware_present_ ? "YES" : "NO");
+  ESP_LOGI(TAG, "Fujitsu Climate Phase 3B initialized — hardware connected, listen mode");
+  ESP_LOGI(TAG, "Waiting for LIN bus frames on UART (500 baud 8N1)...");
+}
 
-  // Skipping initial state read if no hardware connected
-  if (!hardware_present_) {
-    ESP_LOGW(TAG, "No hardware connected - starting with default values");
+void FujitsuClimate::loop() {
+  // Called every main-loop tick — drain all available frames immediately.
+  // This ensures no bus traffic is missed between HA publish intervals.
+  while (hp_.readFrame()) {
+    if (!hardware_present_) {
+      hardware_present_ = true;
+      ESP_LOGI(TAG, "First frame received — hardware confirmed present");
+    }
+    update_climate_state();
+  }
+
+  // Send any pending commands immediately after receiving
+  if (hardware_present_ && hp_.hasPendingFrame()) {
+    hp_.sendPendingFrame();
   }
 }
 
 void FujitsuClimate::update() {
-  // Called periodically by PollingComponent (non-blocking)
-
-  // Read frame from bus if available
-  if (hp_.readFrame()) {
-    hardware_present_ = true;
-    update_climate_state();
+  // Called on interval (1 s) — just publish current state to Home Assistant
+  if (hardware_present_) {
+    publish_state();
   }
-
-  if (!hardware_present_) {
-    return;
-  }
-
-  // Send any pending commands
-  if (hp_.hasPendingFrame()) {
-    hp_.sendPendingFrame();
-  }
-
-  // Publish current state to Home Assistant
-  publish_state();
 }
 
 void FujitsuClimate::dump_config() {
