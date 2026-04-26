@@ -14,7 +14,8 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   FujitsuClimate();
 
   void setup() override;
-  void update() override;
+  void loop() override;   // reads frames on every main-loop tick
+  void update() override; // publishes state to HA on interval
   void dump_config() override;
   
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }

@@ -17,67 +17,6 @@ void FujiHeatPump::connect(uart::UARTComponent *uart, bool secondary) {
   ESP_LOGI(TAG, "LIN interface: TJA1021 compatible");
 }
 
-bool FujiHeatPump::waitForFrame(uint32_t timeout_ms) {
-  uint32_t start = millis();
-  rx_index_ = 0;
-  bool sync_found = false;
-  
-  while (millis() - start < timeout_ms) {
-    yield();  // Prevent watchdog timeout
-    
-    if (uart_->available()) {
-      uint8_t byte;
-      if (uart_->read_byte(&byte)) {
-        
-        // If we haven't found sync yet, look for 0xFE
-        if (!sync_found) {
-          if (byte == FRAME_START) {  // 0xFE
-            rx_buffer_[0] = byte;
-            rx_index_ = 1;
-            sync_found = true;
-            ESP_LOGV(TAG, "Found sync byte 0xFE");
-          } else {
-            // Log what comes before sync for debugging
-            ESP_LOGV(TAG, "Before sync: 0x%02X", byte);
-          }
-          continue;  // Keep looking for sync
-        }
-        
-        // We have sync, collect remaining bytes
-        rx_buffer_[rx_index_++] = byte;
-        
-        // Check if we have a complete frame
-        if (rx_index_ >= FRAME_LENGTH) {
-          if (debug_) {
-            ESP_LOGD(TAG, "Received frame (%d bytes):", rx_index_);
-            for (size_t i = 0; i < rx_index_; i++) {
-              ESP_LOGD(TAG, "  [%d] = 0x%02X", i, rx_buffer_[i]);
-            }
-          }
-          
-          // Check for valid end marker (0xEB appears to be constant frame end, not checksum)
-          if (rx_buffer_[7] == 0xEB) {
-            ESP_LOGI(TAG, "Valid frame received (end marker 0xEB found)");
-            parseFrame(rx_buffer_, rx_index_);
-            last_frame_time_ = millis();
-            rx_index_ = 0;
-            sync_found = false;
-            return true;
-          } else {
-            ESP_LOGW(TAG, "Invalid end marker! Expected 0xEB, got 0x%02X", rx_buffer_[7]);
-            // Reset and look for next sync
-            rx_index_ = 0;
-            sync_found = false;
-          }
-        }
-      }
-    }
-    delay(1);
-  }
-  
-  return false;
-}
-
 bool FujiHeatPump::readFrame() {
   // Non-blocking: consume only bytes currently available and assemble 8-byte frames
   while (uart_->available()) {
@@ -130,81 +69,71 @@ void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
     return;
   }
 
-  // Frame structure based on unreality/FujiHeatPump protocol:
-  // Byte 0: 0xFE (sync)
-  // Byte 1: Address/Source
-  // Byte 2: Address/Dest
-  // Byte 3: Power (bit 0), Mode (bits 1-3), Fan (bits 4-6), Error (bit 7)
-  // Byte 4: Target temperature (bits 0-6, stored as temp-16), Economy (bit 7)
-  // Byte 5: Update magic (bits 4-7), Swing (bit 2), Swing step (bit 1)
-  // Byte 6: Controller present (bit 0), Controller temp (bits 1-6, direct °C)
-  // Byte 7: 0xEB (end marker)
-
-  if (debug_) {
-    // Raw hex dump — stack-allocated, no heap allocation
+  // --- Always dump the raw frame at DEBUG level for capture/analysis ---
+  // Format: RAW [src→dst]: FE 21 10 09 06 00 33 EB
+  {
     char hex_buf[3 * FRAME_LENGTH + 1];
     for (size_t i = 0; i < FRAME_LENGTH; i++) {
-      snprintf(hex_buf + i * 3, 3, "%02X", frame[i]);
-      hex_buf[i * 3 + 2] = (i < FRAME_LENGTH - 1) ? ' ' : '\0';
+      snprintf(hex_buf + i * 3, 4, "%02X ", frame[i]);
     }
-    hex_buf[3 * FRAME_LENGTH] = '\0';  // ensure null-terminated
-    ESP_LOGD(TAG, "Raw frame: %s", hex_buf);
-    ESP_LOGD(TAG, "  Byte[3]=0x%02X  power=%d mode=%d fan=%d err=%d",
-             frame[3],
-             frame[3] & 0x01,
-             (frame[3] >> 1) & 0x07,
-             (frame[3] >> 4) & 0x07,
-             (frame[3] >> 7) & 0x01);
-    ESP_LOGD(TAG, "  Byte[4]=0x%02X  temp_raw=%d economy=%d",
-             frame[4],
-             frame[4] & 0x7F,
-             (frame[4] >> 7) & 0x01);
-    ESP_LOGD(TAG, "  Byte[6]=0x%02X  ctrl_temp_raw=%d ctrl_present=%d",
-             frame[6],
-             (frame[6] >> 1) & 0x3F,
-             frame[6] & 0x01);
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGD(TAG, "RAW [0x%02X->0x%02X]: %s", frame[1], frame[2], hex_buf);
   }
 
-  // Extract power state (byte 3, bit 0)
+  // Frame structure (unreality/FujiHeatPump protocol):
+  // [0] 0xFE  start marker
+  // [1] src   source address  (0x21=secondary controller, 0x20=primary, 0x01=unit?)
+  // [2] dst   dest address
+  // [3] bits: power(0), mode(1-3), fan(4-6), error(7)
+  // [4] bits: target_temp_raw(0-6) = °C-16, economy(7), 0x7F=no setpoint
+  // [5] bits: swing_step(1), swing(2), update_magic(4-7)
+  // [6] bits: ctrl_present(0), room_temp(1-6) = direct °C
+  // [7] 0xEB  end marker
+
+  ESP_LOGD(TAG, "  B3=0x%02X  pwr=%d mode=%d fan=%d err=%d",
+           frame[3],
+           frame[3] & 0x01, (frame[3] >> 1) & 0x07,
+           (frame[3] >> 4) & 0x07, (frame[3] >> 7) & 0x01);
+  ESP_LOGD(TAG, "  B4=0x%02X  temp_raw=%d (->%.0f°C) eco=%d",
+           frame[4], frame[4] & 0x7F,
+           (float)(frame[4] & 0x7F) + TEMP_OFFSET,
+           (frame[4] >> 7) & 0x01);
+  ESP_LOGD(TAG, "  B5=0x%02X  magic=%d swing=%d step=%d",
+           frame[5], (frame[5] >> 4) & 0x0F,
+           (frame[5] >> 2) & 0x01, (frame[5] >> 1) & 0x01);
+  ESP_LOGD(TAG, "  B6=0x%02X  room=%.0f°C ctrl_present=%d",
+           frame[6], (float)((frame[6] & 0x7E) >> 1), frame[6] & 0x01);
+
+  // --- Decode fields ---
+
+  // Byte 3: power, mode, fan
   on_off_ = (frame[3] & 0x01) != 0;
+  mode_ = static_cast<FujiMode>((frame[3] & 0x0E) >> 1);
+  fan_mode_ = static_cast<FujiFanMode>((frame[3] & 0x70) >> 4);
 
-  // Extract mode (byte 3, bits 1-3)
-  uint8_t mode_bits = (frame[3] & 0x0E) >> 1;
-  mode_ = static_cast<FujiMode>(mode_bits);
-
-  // Extract fan mode (byte 3, bits 4-6)
-  uint8_t fan_bits = (frame[3] & 0x70) >> 4;
-  fan_mode_ = static_cast<FujiFanMode>(fan_bits);
-
-  // Extract target temperature (byte 4, bits 0-6).
-  // The protocol stores target temp as (°C - TEMP_OFFSET); valid stored range is
-  // [0, TEMP_RAW_MAX] (representing 16-30°C).  0x7F / all-bits-set is a sentinel.
+  // Byte 4: target temperature (stored as °C - TEMP_OFFSET, range 0–14 → 16–30°C)
   uint8_t raw_temp = frame[4] & 0x7F;
   if (raw_temp <= TEMP_RAW_MAX) {
     temperature_ = static_cast<float>(raw_temp) + static_cast<float>(TEMP_OFFSET);
   } else {
-    ESP_LOGW(TAG, "Target temp raw value out of range: %d (byte4=0x%02X) — keeping previous %.1f°C",
+    ESP_LOGW(TAG, "Target temp raw=%d out of range (byte4=0x%02X) — keeping %.1f°C",
              raw_temp, frame[4], temperature_);
   }
 
-  // Extract current/controller temperature (byte 6, bits 1-6, right-shifted by 1).
-  // Valid room-temperature range: 0–ROOM_TEMP_MAX_C.
-  if ((frame[6] & 0x01) != 0) {  // Controller present bit
+  // Byte 6: room temperature (bits 1-6, direct °C) and controller-present flag
+  if ((frame[6] & 0x01) != 0) {
     float ctrl_temp = static_cast<float>((frame[6] & 0x7E) >> 1);
     if (ctrl_temp <= ROOM_TEMP_MAX_C) {
       current_temperature_ = ctrl_temp;
     } else {
-      ESP_LOGW(TAG, "Current temp out of range: %.1f°C (byte6=0x%02X) — keeping previous %.1f°C",
+      ESP_LOGW(TAG, "Room temp %.1f°C out of range (byte6=0x%02X) — keeping %.1f°C",
                ctrl_temp, frame[6], current_temperature_);
     }
   }
 
-  ESP_LOGI(TAG, "State: Power=%s, Mode=%d, Temp=%.1f°C, CurrentTemp=%.1f°C, Fan=%d",
-           on_off_ ? "ON" : "OFF",
-           static_cast<int>(mode_),
-           temperature_,
-           current_temperature_,
-           static_cast<int>(fan_mode_));
+  ESP_LOGI(TAG, "State: pwr=%s mode=%d temp=%.0f°C room=%.0f°C fan=%d",
+           on_off_ ? "ON" : "OFF", static_cast<int>(mode_),
+           temperature_, current_temperature_, static_cast<int>(fan_mode_));
 }
 
 void FujiHeatPump::buildFrame() {

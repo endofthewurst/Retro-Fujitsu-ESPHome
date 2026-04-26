@@ -52,8 +52,7 @@ class FujiHeatPump {
   // Initialize connection
   void connect(uart::UARTComponent *uart, bool secondary);
   
-  // Frame reading
-  bool waitForFrame(uint32_t timeout_ms = 1000);
+  // Frame reading (non-blocking — call from loop())
   bool readFrame();
   
   // State setters (prepare frame for sending)
