@@ -156,6 +156,8 @@ After extensive testing, the correct UART settings for the ART30LUAK are:
 
 ## Protocol
 
+> ⚠️ **Work in progress** — The byte mappings below are based on reference implementations from other Fujitsu models. Live capture from this specific unit (ART30LUAK / RSG series) is still in progress. Field meanings, bit positions, and address values are unconfirmed until validated against real bus traffic. Do not rely on this table for transmit commands yet.
+
 The Fujitsu LIN bus protocol uses **8-byte frames**:
 
 | Byte | Content | Notes |

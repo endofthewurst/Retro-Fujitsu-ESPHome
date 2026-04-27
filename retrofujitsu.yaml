@@ -6,6 +6,9 @@
 esphome:
   name: aircon
   friendly_name: "Aircon"
+  project:
+    name: "james.retro-fujitsu"
+    version: "3B.2"
   on_boot:
     priority: 600
     then:
