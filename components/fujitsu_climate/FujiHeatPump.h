@@ -85,11 +85,11 @@ class FujiHeatPump {
   bool connected_{false};
   bool debug_{false};
   
-  // Current state (from bus)
+  // Current state (from bus) — NAN until first frame received
   bool on_off_{false};
   FujiMode mode_{FujiMode::MODE_AUTO};
-  float temperature_{22.0};
-  float current_temperature_{22.0};
+  float temperature_{NAN};
+  float current_temperature_{NAN};
   FujiFanMode fan_mode_{FujiFanMode::FAN_AUTO};
   
   // Pending changes flag

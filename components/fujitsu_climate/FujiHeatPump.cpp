@@ -245,8 +245,9 @@ void FujiHeatPump::setTemperature(float temp) {
   // Clamp to valid range
   if (temp < 16.0f) temp = 16.0f;
   if (temp > 30.0f) temp = 30.0f;
-  
-  if (abs(temperature_ - temp) > 0.1f) {
+
+  // Guard against NAN comparison (std::abs(NAN - x) is NAN, always false)
+  if (std::isnan(temperature_) || std::abs(temperature_ - temp) > 0.1f) {
     temperature_ = temp;
     buildFrame();
     ESP_LOGI(TAG, "Set temperature: %.1f°C", temp);

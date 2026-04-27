@@ -10,12 +10,13 @@ static const char *const TAG = "fujitsu.climate";
 constexpr uint32_t PUBLISH_INTERVAL_MS = 1000;
 
 FujitsuClimate::FujitsuClimate() : PollingComponent(PUBLISH_INTERVAL_MS) {
-  // Initialize defaults for safe discovery
-  target_temperature = 22.0f;
-  current_temperature = 22.0f;
+  // Use NAN for temperatures — ESPHome/HA renders these as "unknown" until
+  // real values arrive from the bus. Do NOT fabricate readings.
+  target_temperature = NAN;
+  current_temperature = NAN;
   mode = climate::CLIMATE_MODE_OFF;
   fan_mode = climate::CLIMATE_FAN_AUTO;
-  action = climate::CLIMATE_ACTION_OFF;
+  action = climate::CLIMATE_ACTION_IDLE;
   hardware_present_ = false;
 }
 
