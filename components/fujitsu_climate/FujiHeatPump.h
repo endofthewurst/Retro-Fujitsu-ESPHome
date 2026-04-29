@@ -7,10 +7,21 @@ namespace esphome {
 namespace fujitsu_climate {
 
 // Fujitsu protocol frame structure
-// Based on 2017 Hackaday reverse engineering and original FujiHeatPump project.
-// Byte 4 (target temp): stored as (°C - 16), valid range 0-14 → 16-30°C.
-// Byte 6 (room temp): bits 1-6 direct °C after right-shift-by-1.
-static const uint8_t FRAME_START = 0xFE;
+// Based on live bus capture from ART30LUAK / UTY-RNNUM (RSG series ~2010).
+// NOTE: This model uses DIFFERENT frame markers than reference implementations
+//       (unreality/FujiHeatPump, jaroslawprzybylowicz) which targeted other models.
+//
+// Observed 16-byte repeating cycle on the bus:
+//   FE DF DF 7F FF D6 EB 6B  ← Unit status frame (starts 0xFE, ends 0x6B)
+//   D1 FF FF 5F FF D6 EB 4B  ← Controller frame  (starts 0xD0-0xDE, ends 0x4B)
+//
+// The controller start byte lower nibble appears to toggle/vary (0xD0, 0xD1 seen).
+// Both frame types are 8 bytes.
+static const uint8_t FRAME_START = 0xFE;           // Unit status frame start
+static const uint8_t FRAME_END = 0x6B;             // Unit frame end marker (ART30LUAK)
+static const uint8_t FRAME_END_ALT = 0xEB;         // Alt unit frame end (other models / keep for compat)
+static const uint8_t FRAME_END_CTRL = 0x4B;        // Controller frame end marker
+static const uint8_t FRAME_CTRL_START_NIBBLE = 0xD0; // Controller frame start: upper byte = 0xD, lower = varies
 static const uint8_t FRAME_LENGTH = 8;
 
 // Target temperature encoding: stored value = (°C - TEMP_OFFSET), range [0, TEMP_RAW_MAX]
@@ -94,15 +105,20 @@ class FujiHeatPump {
   
   // Pending changes flag
   bool has_pending_frame_{false};
+
+  // Protocol sync state: after a valid unit frame, the very next 8 bytes are
+  // the ctrl frame regardless of start byte. This flag gates that acceptance.
+  bool expecting_ctrl_{false};
   
   // Frame buffers
   uint8_t rx_buffer_[32];
   uint8_t tx_buffer_[32];
   size_t rx_index_{0};
   
-  // Parse received frame
-  void parseFrame(const uint8_t *frame, size_t len);
-  
+  // Parse received frames
+  void parseFrame(const uint8_t *frame, size_t len);      // UNIT frame (FE...6B)
+  void parseCTRLFrame(const uint8_t *frame, size_t len);  // CTRL frame (??...4B)
+
   // Build transmit frame
   void buildFrame();
   
