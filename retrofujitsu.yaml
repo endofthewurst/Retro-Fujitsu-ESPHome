@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.2"
+    version: "3B.11"
   on_boot:
     priority: 600
     then:
@@ -30,7 +30,7 @@ logger:
   logs:
     fujitsu.heatpump: DEBUG
     fujitsu.climate: DEBUG
-    uart: VERBOSE
+    uart: WARN
 
 # UART for LIN bus communication via TJA1021/SIT1021T transceiver
 # Pull-up on RX pin prevents the floating-pin crash when not wired to bus

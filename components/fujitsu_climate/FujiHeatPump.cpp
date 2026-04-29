@@ -23,14 +23,19 @@ bool FujiHeatPump::readFrame() {
     uint8_t byte;
     if (!uart_->read_byte(&byte)) break;
 
+    // Always log every raw byte at VERBOSE level for protocol capture/debug
+    ESP_LOGV(TAG, "RX byte: 0x%02X", byte);
+
     if (rx_index_ == 0) {
-      // Waiting for frame start marker
-      if (byte == FRAME_START) {
+      // Sync strategy: only 0xFE locks us onto a unit frame. The ctrl frame
+      // immediately follows a valid unit frame, so we accept any start byte
+      // only while expecting_ctrl_ is set. Everything else is discarded until
+      // we see 0xFE again — this prevents the infinite offset-drift loop.
+      if (byte == FRAME_START || expecting_ctrl_) {
         rx_buffer_[rx_index_++] = byte;
+        // expecting_ctrl_ stays set until the full 8-byte ctrl frame is done
       } else {
-        if (debug_) {
-          ESP_LOGD(TAG, "Pre-sync byte: 0x%02X", byte);
-        }
+        ESP_LOGV(TAG, "Pre-sync: 0x%02X", byte);
       }
       continue;
     }
@@ -45,16 +50,36 @@ bool FujiHeatPump::readFrame() {
       // Complete frame assembled; reset index for next frame
       rx_index_ = 0;
 
-      if (rx_buffer_[FRAME_LENGTH - 1] == 0xEB) {
-        if (debug_) {
-          ESP_LOGD(TAG, "Valid frame received");
+      uint8_t end_byte = rx_buffer_[FRAME_LENGTH - 1];
+      uint8_t start_byte = rx_buffer_[0];
+      bool valid_unit = (start_byte == FRAME_START && (end_byte == FRAME_END || end_byte == FRAME_END_ALT));
+      bool valid_ctrl = (start_byte != FRAME_START) && (end_byte == FRAME_END_CTRL);
+
+      if (valid_unit || valid_ctrl) {
+        // Log frame type clearly for protocol capture
+        char hex_buf[3 * FRAME_LENGTH + 1];
+        for (size_t i = 0; i < FRAME_LENGTH; i++) {
+          snprintf(hex_buf + i * 3, 4, "%02X ", rx_buffer_[i]);
         }
-        parseFrame(rx_buffer_, FRAME_LENGTH);
+        hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+
+        if (valid_unit) {
+          ESP_LOGD(TAG, "UNIT  frame: %s", hex_buf);
+          parseFrame(rx_buffer_, FRAME_LENGTH);
+          expecting_ctrl_ = true;  // Next 8 bytes are the ctrl frame
+        } else if (valid_ctrl) {
+          ESP_LOGD(TAG, "CTRL  frame: %s", hex_buf);
+          parseCTRLFrame(rx_buffer_, FRAME_LENGTH);
+          expecting_ctrl_ = false;  // Ctrl frame consumed
+        }
         last_frame_time_ = millis();
         return true;
       } else {
+        // Invalid frame — if we were expecting a ctrl frame, drop it and
+        // re-sync to the next 0xFE unit frame start
+        expecting_ctrl_ = false;
         if (debug_) {
-          ESP_LOGD(TAG, "Invalid end marker: 0x%02X", rx_buffer_[FRAME_LENGTH - 1]);
+          ESP_LOGD(TAG, "Invalid frame: start=0x%02X end=0x%02X", start_byte, end_byte);
         }
       }
     }
@@ -80,60 +105,78 @@ void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
     ESP_LOGD(TAG, "RAW [0x%02X->0x%02X]: %s", frame[1], frame[2], hex_buf);
   }
 
-  // Frame structure (unreality/FujiHeatPump protocol):
+  // Frame structure — ART30LUAK / UTY-RNNUM (RSG series ~2010), confirmed by live capture:
   // [0] 0xFE  start marker
-  // [1] src   source address  (0x21=secondary controller, 0x20=primary, 0x01=unit?)
-  // [2] dst   dest address
-  // [3] bits: power(0), mode(1-3), fan(4-6), error(7)
-  // [4] bits: target_temp_raw(0-6) = °C-16, economy(7), 0x7F=no setpoint
-  // [5] bits: swing_step(1), swing(2), update_magic(4-7)
-  // [6] bits: ctrl_present(0), room_temp(1-6) = direct °C
-  // [7] 0xEB  end marker
+  // [1] 0xDF  fixed (unit address / frame type identifier)
+  // [2] 0xDF  fixed
+  // [3] 0x7F  fixed (always 0x7F, purpose unknown — NOT power/mode/fan for this unit)
+  // [4] 0xFF  fixed (always 0xFF — NOT temperature for this unit)
+  // [5] state byte A: bits[4:1] = temp_raw (°C − 16); bits[7:4] = ~mode (inverted mode nibble)
+  // [6] state byte B: purpose still being mapped (bit[1] = update-in-progress flag suspected)
+  // [7] 0x6B  end marker (0xEB on some alternate frames)
+  //
+  // Temperature: ((frame[5] >> 1) & 0x0F) + 16  e.g. 0xC9 → 4 + 16 = 20°C ✓
+  // Mode:        (~(frame[5] >> 4)) & 0x0F        e.g. 0xC9 → ~0xC & 0xF = 3 = COOL ✓
+  //
+  // Power and fan are in the CTRL frame start byte — see parseCTRLFrame().
 
-  ESP_LOGD(TAG, "  B3=0x%02X  pwr=%d mode=%d fan=%d err=%d",
-           frame[3],
-           frame[3] & 0x01, (frame[3] >> 1) & 0x07,
-           (frame[3] >> 4) & 0x07, (frame[3] >> 7) & 0x01);
-  ESP_LOGD(TAG, "  B4=0x%02X  temp_raw=%d (->%.0f°C) eco=%d",
-           frame[4], frame[4] & 0x7F,
-           (float)(frame[4] & 0x7F) + TEMP_OFFSET,
-           (frame[4] >> 7) & 0x01);
-  ESP_LOGD(TAG, "  B5=0x%02X  magic=%d swing=%d step=%d",
-           frame[5], (frame[5] >> 4) & 0x0F,
-           (frame[5] >> 2) & 0x01, (frame[5] >> 1) & 0x01);
-  ESP_LOGD(TAG, "  B6=0x%02X  room=%.0f°C ctrl_present=%d",
-           frame[6], (float)((frame[6] & 0x7E) >> 1), frame[6] & 0x01);
+  ESP_LOGD(TAG, "  B3=0x%02X B4=0x%02X (fixed overhead)",
+           frame[3], frame[4]);
+  ESP_LOGD(TAG, "  B5=0x%02X  temp_raw=%d (->%.0f°C) mode_nibble=%d",
+           frame[5], (frame[5] >> 1) & 0x0F,
+           (float)((frame[5] >> 1) & 0x0F) + TEMP_OFFSET,
+           (~(frame[5] >> 4)) & 0x0F);
+  ESP_LOGD(TAG, "  B6=0x%02X  (mapping TBD)", frame[6]);
 
-  // --- Decode fields ---
+  // --- Decode fields from UNIT frame ---
 
-  // Byte 3: power, mode, fan
-  on_off_ = (frame[3] & 0x01) != 0;
-  mode_ = static_cast<FujiMode>((frame[3] & 0x0E) >> 1);
-  fan_mode_ = static_cast<FujiFanMode>((frame[3] & 0x70) >> 4);
-
-  // Byte 4: target temperature (stored as °C - TEMP_OFFSET, range 0–14 → 16–30°C)
-  uint8_t raw_temp = frame[4] & 0x7F;
+  // Byte 5: target temperature, bits[4:1] = °C - TEMP_OFFSET
+  uint8_t raw_temp = (frame[5] >> 1) & 0x0F;
   if (raw_temp <= TEMP_RAW_MAX) {
     temperature_ = static_cast<float>(raw_temp) + static_cast<float>(TEMP_OFFSET);
   } else {
-    ESP_LOGW(TAG, "Target temp raw=%d out of range (byte4=0x%02X) — keeping %.1f°C",
-             raw_temp, frame[4], temperature_);
+    ESP_LOGW(TAG, "Target temp raw=%d out of range (byte5=0x%02X) — keeping %.1f°C",
+             raw_temp, frame[5], temperature_);
   }
 
-  // Byte 6: room temperature (bits 1-6, direct °C) and controller-present flag
-  if ((frame[6] & 0x01) != 0) {
-    float ctrl_temp = static_cast<float>((frame[6] & 0x7E) >> 1);
-    if (ctrl_temp <= ROOM_TEMP_MAX_C) {
-      current_temperature_ = ctrl_temp;
-    } else {
-      ESP_LOGW(TAG, "Room temp %.1f°C out of range (byte6=0x%02X) — keeping %.1f°C",
-               ctrl_temp, frame[6], current_temperature_);
-    }
+  // Byte 5: mode, upper nibble = ~mode
+  uint8_t mode_raw = (~(frame[5] >> 4)) & 0x0F;
+  if (mode_raw <= static_cast<uint8_t>(FujiMode::MODE_AUTO)) {
+    mode_ = static_cast<FujiMode>(mode_raw);
   }
 
+  // Note: power and fan are decoded from CTRL frame — see parseCTRLFrame().
+  // Log whatever state we have (on_off_ and fan_mode_ may still be from last CTRL frame).
   ESP_LOGI(TAG, "State: pwr=%s mode=%d temp=%.0f°C room=%.0f°C fan=%d",
            on_off_ ? "ON" : "OFF", static_cast<int>(mode_),
            temperature_, current_temperature_, static_cast<int>(fan_mode_));
+}
+
+void FujiHeatPump::parseCTRLFrame(const uint8_t *frame, size_t len) {
+  if (len < FRAME_LENGTH) return;
+
+  // CTRL frame structure — ART30LUAK confirmed by live capture:
+  // [0] ctrl_start: upper nibble = 0xC (varies); bits[4:2] = fan mode; bit[1] = power on
+  // [1] 0xFF  fixed
+  // [2] 0xFF  fixed
+  // [3] 0x5F  normally; 0x7E briefly during updates (change-in-progress flag)
+  // [4] 0xFF  fixed
+  // [5] same as UNIT frame B5 (temp + mode — redundant confirmation)
+  // [6] same as UNIT frame B6
+  // [7] 0x4B  end marker
+  //
+  // Power: (frame[0] >> 1) & 0x01   e.g. CC→0=OFF, CE→1=ON
+  // Fan:   (frame[0] >> 2) & 0x07   e.g. 0xCC/0xCE → 3 = MED ✓
+
+  uint8_t ctrl0 = frame[0];
+  on_off_ = ((ctrl0 >> 1) & 0x01) != 0;
+  uint8_t fan_raw = (ctrl0 >> 2) & 0x07;
+  if (fan_raw <= static_cast<uint8_t>(FujiFanMode::FAN_HIGH)) {
+    fan_mode_ = static_cast<FujiFanMode>(fan_raw);
+  }
+
+  ESP_LOGI(TAG, "CTRL decoded: pwr=%s fan=%d (CTRL0=0x%02X)",
+           on_off_ ? "ON" : "OFF", static_cast<int>(fan_mode_), ctrl0);
 }
 
 void FujiHeatPump::buildFrame() {
