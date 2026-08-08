@@ -1,0 +1,558 @@
+[13:32:02][I][app:100]: ESPHome version 2025.4.2 compiled on Apr 29 2026, 13:30:51
+[13:32:02][I][app:102]: Project james.retro-fujitsu version 3B.11
+[13:32:02][C][status_led:065]: Status Led Light:
+[13:32:02][C][status_led:066]:   Pin: GPIO2
+[13:32:02][C][wifi:600]: WiFi:
+[13:32:02][C][wifi:428]:   Local MAC: A4:F0:0F:69:19:E8
+[13:32:02][C][wifi:433]:   SSID: 'moose'
+[13:32:02][C][wifi:436]:   IP Address: 192.168.1.40
+[13:32:02][C][wifi:440]:   BSSID: 00:11:32:84:54:AF
+[13:32:02][C][wifi:441]:   Hostname: 'aircon'
+[13:32:02][C][wifi:443]:   Signal strength: -66 dB [13:32:02][V][wifi:445]:   Priority: -5.0
+[13:32:02][C][wifi:447]:   Channel: 2
+[13:32:02][C][wifi:448]:   Subnet: 255.255.255.0
+[13:32:02][C][wifi:449]:   Gateway: 192.168.1.1
+[13:32:02][C][wifi:450]:   DNS1: 192.168.1.1
+[13:32:02][C][wifi:451]:   DNS2: 0.0.0.0
+[13:32:02][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:02][D][climate:399]:   Mode: COOL
+[13:32:02][D][climate:401]:   Action: COOLING
+[13:32:02][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:02][D][climate:419]:   Current Temperature: nan°C
+[13:32:02][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:02][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:03][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:03][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:03][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (69 ms).
+[13:32:03][C][logger:178]:   Max Level: VERBOSE
+[13:32:03][C][uptime.sensor:034]:   Type: Seconds
+[13:32:03][C][template.sensor:022]:   State Class: ''
+[13:32:03][C][version.text_sensor:021]: Version Text Sensor 'ESPHome Version'
+[13:32:03][V][version.text_sensor:021]:   Unique ID: 'a4f00f6919e8-version'
+[13:32:03][C][captive_portal:089]: Captive Portal:
+[13:32:03][V][mdns:122]:     TXT: version = 2025.4.2
+[13:32:03][V][mdns:122]:     TXT: mac = a4f00f6919e8
+[13:32:03][V][mdns:122]:     TXT: platform = ESP32
+[13:32:03][V][wifi_info:012]:   Unique ID: 'a4f00f6919e8-wifiinfo-ssid'
+[13:32:04][V][sensor:043]: 'WiFi Signal': Received new state -66.000000
+[13:32:04][D][sensor:094]: 'WiFi Signal': Sending state -66.00000 dBm with 0 decimals of accuracy
+[13:32:04][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:04][D][climate:399]:   Mode: COOL
+[13:32:04][D][climate:401]:   Action: COOLING
+[13:32:04][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:04][D][climate:419]:   Current Temperature: nan°C
+[13:32:04][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:04][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:04][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:04][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:04][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:04][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:04][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:04][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:04][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:04][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:04][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:04][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:04][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:04][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:04][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:04][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:04][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:04][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:04][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:04][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:04][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:04][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:04][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (73 ms).
+[13:32:07][W][component:240]: Components should block for at most 30 ms.
+[13:32:07][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:07][D][climate:399]:   Mode: COOL
+[13:32:07][D][climate:401]:   Action: COOLING
+[13:32:07][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:07][D][climate:419]:   Current Temperature: nan°C
+[13:32:07][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:07][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (69 ms).
+[13:32:07][W][component:240]: Components should block for at most 30 ms.
+[13:32:07][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:07][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (69 ms).
+[13:32:07][W][component:240]: Components should block for at most 30 ms.
+[13:32:07][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (64 ms).
+[13:32:07][W][component:240]: Components should block for at most 30 ms.
+[13:32:07][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:07][D][climate:399]:   Mode: COOL
+[13:32:07][D][climate:401]:   Action: COOLING
+[13:32:07][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:07][D][climate:419]:   Current Temperature: nan°C
+[13:32:07][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:07][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (67 ms).
+[13:32:07][W][component:240]: Components should block for at most 30 ms.
+[13:32:07][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:07][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (64 ms).
+[13:32:07][W][component:240]: Components should block for at most 30 ms.
+[13:32:07][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:07][D][climate:399]:   Mode: COOL
+[13:32:07][D][climate:401]:   Action: COOLING
+[13:32:07][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:07][D][climate:419]:   Current Temperature: nan°C
+[13:32:07][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:07][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:07][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (75 ms).
+[13:32:07][W][component:240]: Components should block for at most 30 ms.
+[13:32:07][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:07][D][climate:399]:   Mode: COOL
+[13:32:07][D][climate:401]:   Action: COOLING
+[13:32:07][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:07][D][climate:419]:   Current Temperature: nan°C
+[13:32:07][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:07][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:07][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:07][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:07][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:07][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:07][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:07][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:07][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:10][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:10][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:10][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:10][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (71 ms).
+[13:32:10][W][component:240]: Components should block for at most 30 ms.
+[13:32:10][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:10][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:10][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:10][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:10][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:10][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (67 ms).
+[13:32:10][W][component:240]: Components should block for at most 30 ms.
+[13:32:10][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:10][D][climate:399]:   Mode: COOL
+[13:32:10][D][climate:401]:   Action: COOLING
+[13:32:10][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:10][D][climate:419]:   Current Temperature: nan°C
+[13:32:10][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:10][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:10][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:10][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:10][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:10][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:10][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (72 ms).
+[13:32:10][W][component:240]: Components should block for at most 30 ms.
+[13:32:10][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:10][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:10][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:10][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:10][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (68 ms).
+[13:32:10][W][component:240]: Components should block for at most 30 ms.
+[13:32:10][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:10][D][climate:399]:   Mode: COOL
+[13:32:10][D][climate:401]:   Action: COOLING
+[13:32:10][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:10][D][climate:419]:   Current Temperature: nan°C
+[13:32:10][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:10][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:10][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:10][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:10][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:10][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (73 ms).
+[13:32:10][W][component:240]: Components should block for at most 30 ms.
+[13:32:10][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:10][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:10][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:10][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:10][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:10][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:10][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:10][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:10][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:10][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:10][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:10][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (140 ms).
+[13:32:10][W][component:240]: Components should block for at most 30 ms.
+[13:32:11][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:11][D][climate:399]:   Mode: COOL
+[13:32:11][D][climate:401]:   Action: COOLING
+[13:32:11][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:11][D][climate:419]:   Current Temperature: nan°C
+[13:32:11][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:11][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:11][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:11][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:11][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:11][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:11][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:11][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:11][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:11][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:11][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:11][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:11][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:11][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:11][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:11][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:11][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:11][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:13][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:13][D][climate:399]:   Mode: COOL
+[13:32:13][D][climate:401]:   Action: COOLING
+[13:32:13][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:13][D][climate:419]:   Current Temperature: nan°C
+[13:32:13][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:13][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:13][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:13][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:13][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:13][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (67 ms).
+[13:32:13][W][component:240]: Components should block for at most 30 ms.
+[13:32:13][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:13][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:13][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:13][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:13][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (66 ms).
+[13:32:13][W][component:240]: Components should block for at most 30 ms.
+[13:32:13][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:13][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:13][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:13][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:13][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:13][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (66 ms).
+[13:32:13][W][component:240]: Components should block for at most 30 ms.
+[13:32:13][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:13][D][climate:399]:   Mode: COOL
+[13:32:13][D][climate:401]:   Action: COOLING
+[13:32:13][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:13][D][climate:419]:   Current Temperature: nan°C
+[13:32:13][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:13][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:13][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:13][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:13][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:13][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:13][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:13][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:13][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:13][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:13][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:13][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:13][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:13][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (136 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:17][D][climate:399]:   Mode: COOL
+[13:32:17][D][climate:401]:   Action: COOLING
+[13:32:17][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:17][D][climate:419]:   Current Temperature: nan°C
+[13:32:17][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (65 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (66 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:17][D][climate:399]:   Mode: COOL
+[13:32:17][D][climate:401]:   Action: COOLING
+[13:32:17][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:17][D][climate:419]:   Current Temperature: nan°C
+[13:32:17][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (67 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (66 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (69 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:17][D][climate:399]:   Mode: COOL
+[13:32:17][D][climate:401]:   Action: COOLING
+[13:32:17][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:17][D][climate:419]:   Current Temperature: nan°C
+[13:32:17][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (69 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (66 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:17][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:17][D][climate:399]:   Mode: COOL
+[13:32:17][D][climate:401]:   Action: COOLING
+[13:32:17][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:17][D][climate:419]:   Current Temperature: nan°C
+[13:32:17][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:17][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:17][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:17][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:17][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:17][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:17][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:17][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:17][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:17][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (69 ms).
+[13:32:17][W][component:240]: Components should block for at most 30 ms.
+[13:32:18][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:18][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:18][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:18][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:18][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:18][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:18][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:18][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:18][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:18][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:18][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:18][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:18][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:18][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:18][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:18][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:18][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:18][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:18][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:18][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:18][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:18][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:18][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:18][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:18][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:18][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:18][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:18][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:18][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (65 ms).
+[13:32:18][W][component:240]: Components should block for at most 30 ms.
+[13:32:18][D][status_led:050]: 'Status LED': Setting state ON
+[13:32:19][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:32:19][D][climate:399]:   Mode: COOL
+[13:32:19][D][climate:401]:   Action: COOLING
+[13:32:19][D][climate:404]:   Fan Mode: MEDIUM
+[13:32:19][D][climate:419]:   Current Temperature: nan°C
+[13:32:19][D][climate:425]:   Target Temperature: 20.00°C
+[13:32:19][D][status_led:050]: 'Status LED': Setting state OFF
+[13:32:19][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:19][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:19][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:19][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:19][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:19][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:19][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:19][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:19][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:19][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:19][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C9 EB 6B
+[13:32:19][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:19][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:32:19][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:19][D][fujitsu.heatpump:129]:   B6=0xEB  (mapping TBD)
+[13:32:19][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:19][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:19][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C9 EB 4B
+[13:32:19][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:32:19][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:19][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C9 EB 6B
+[13:32:19][D][fujitsu.heatpump:128]:   B5=0xC9  temp_raw=4 (->20°C) mode_nibble=3
+[13:32:19][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=20°C room=nan°C fan=3
+[13:32:19][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 20.0°C, Current: nan°C
+[13:32:19][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (216 ms).

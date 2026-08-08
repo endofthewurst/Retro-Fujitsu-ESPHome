@@ -1,0 +1,425 @@
+[13:46:54][I][app:100]: ESPHome version 2025.4.2 compiled on Apr 29 2026, 13:30:51
+[13:46:54][I][app:102]: Project james.retro-fujitsu version 3B.11
+[13:46:54][C][status_led:065]: Status Led Light:
+[13:46:54][C][status_led:066]:   Pin: GPIO2
+[13:46:54][C][wifi:600]: WiFi:
+[13:46:54][C][wifi:428]:   Local MAC: A4:F0:0F:69:19:E8
+[13:46:54][C][wifi:433]:   SSID: 'moose'
+[13:46:54][C][wifi:436]:   IP Address: 192.168.1.40
+[13:46:54][C][wifi:440]:   BSSID: 00:11:32:84:54:AF
+[13:46:54][C][wifi:441]:   Hostname: 'aircon'
+[13:46:54][C][wifi:443]:   Signal strength: -66 dB [13:46:54][V][wifi:445]:   Priority: -5.0
+[13:46:54][C][wifi:447]:   Channel: 2
+[13:46:54][C][wifi:448]:   Subnet: 255.255.255.0
+[13:46:54][C][wifi:449]:   Gateway: 192.168.1.1
+[13:46:54][C][wifi:450]:   DNS1: 192.168.1.1
+[13:46:54][C][wifi:451]:   DNS2: 0.0.0.0
+[13:46:54][C][logger:177]: Logger:
+[13:46:54][C][logger:178]:   Max Level: VERBOSE
+[13:46:54][C][logger:179]:   Initial Level: VERBOSE
+[13:46:54][C][logger:181]:   Log Baud Rate: 115200
+[13:46:54][C][logger:182]:   Hardware UART: UART0
+[13:46:54][C][logger:186]:   Level for 'fujitsu.climate': DEBUG
+[13:46:54][C][logger:186]:   Level for 'fujitsu.heatpump': DEBUG
+[13:46:54][C][logger:186]:   Level for 'uart': WARN
+[13:46:54][C][uart.arduino_esp32:151]: UART Bus 1:
+[13:46:54][C][uart.arduino_esp32:152]:   TX Pin: GPIO17
+[13:46:54][C][uart.arduino_esp32:153]:   RX Pin: GPIO16
+[13:46:54][C][uart.arduino_esp32:155]:   RX Buffer Size: 256
+[13:46:54][C][uart.arduino_esp32:157]:   Baud Rate: 500 baud
+[13:46:54][C][uart.arduino_esp32:158]:   Data Bits: 8
+[13:46:54][C][uart.arduino_esp32:159]:   Parity: NONE
+[13:46:54][C][uart.arduino_esp32:160]:   Stop bits: 1
+[13:46:54][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:46:54][D][climate:399]:   Mode: COOL
+[13:46:54][D][climate:401]:   Action: COOLING
+[13:46:54][D][climate:404]:   Fan Mode: MEDIUM
+[13:46:54][D][climate:419]:   Current Temperature: nan°C
+[13:46:54][D][climate:425]:   Target Temperature: 18.00°C
+[13:46:54][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:46:54][V][json:040]: Size after shrink 216 bytes
+[13:46:54][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:46:54][V][json:040]: Size after shrink 216 bytes
+[13:46:54][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:46:54][V][json:040]: Size after shrink 216 bytes
+[13:46:54][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (67 ms).
+[13:46:54][W][component:240]: Components should block for at most 30 ms.
+[13:46:54][C][uptime.sensor:033]: Uptime Sensor 'Uptime'
+[13:46:54][C][uptime.sensor:033]:   Device Class: 'duration'
+[13:46:54][C][uptime.sensor:033]:   State Class: 'total_increasing'
+[13:46:54][C][uptime.sensor:033]:   Unit of Measurement: 's'
+[13:46:54][C][uptime.sensor:033]:   Accuracy Decimals: 0
+[13:46:54][C][uptime.sensor:033]:   Icon: 'mdi:timer-outline'
+[13:46:54][V][uptime.sensor:033]:   Unique ID: 'a4f00f6919e8-uptime'
+[13:46:54][C][uptime.sensor:034]:   Type: Seconds
+[13:46:54][D][status_led:050]: 'Status LED': Setting state OFF
+[13:46:54][C][template.sensor:022]: Template Sensor 'Free Heap Memory'
+[13:46:54][C][template.sensor:022]:   State Class: ''
+[13:46:54][C][template.sensor:022]:   Unit of Measurement: 'bytes'
+[13:46:54][C][template.sensor:022]:   Accuracy Decimals: 1
+[13:46:54][C][template.sensor:023]:   Update Interval: 60.0s
+[13:46:54][C][light:092]: Light 'Status LED'
+[13:46:54][C][wifi_info:014]: WifiInfo Mac Address 'MAC Address'
+[13:46:54][V][wifi_info:014]:   Unique ID: 'a4f00f6919e8-wifiinfo-macadr'
+[13:46:54][C][version.text_sensor:021]: Version Text Sensor 'ESPHome Version'
+[13:46:54][C][version.text_sensor:021]:   Icon: 'mdi:new-box'
+[13:46:54][V][version.text_sensor:021]:   Unique ID: 'a4f00f6919e8-version'
+[13:46:54][C][status:034]: Status Binary Sensor 'Status'
+[13:46:54][C][status:034]:   Device Class: 'connectivity'
+[13:46:54][C][restart:068]: Restart Switch 'Restart'
+[13:46:54][C][restart:070]:   Icon: 'mdi:restart'
+[13:46:54][C][restart:091]:   Restore Mode: always OFF
+[13:46:54][C][safe_mode.button:024]: Safe Mode Button 'Safe Mode Boot'
+[13:46:54][C][safe_mode.button:024]:   Icon: 'mdi:restart-alert'
+[13:46:54][C][homeassistant.time:010]: Home Assistant Time:
+[13:46:54][C][homeassistant.time:011]:   Timezone: 'NZST-12NZDT,M9.5.0,M4.1.0/3'
+[13:46:54][C][captive_portal:089]: Captive Portal:
+[13:46:54][C][web_server:285]: Web Server:
+[13:46:54][C][web_server:286]:   Address: aircon.local:80
+[13:46:54][C][mdns:116]: mDNS:
+[13:46:54][C][mdns:117]:   Hostname: aircon
+[13:46:54][V][mdns:118]:   Services:
+[13:46:54][V][mdns:120]:   - _esphomelib, _tcp, 6053
+[13:46:54][V][mdns:122]:     TXT: friendly_name = Aircon
+[13:46:54][V][mdns:122]:     TXT: version = 2025.4.2
+[13:46:54][V][mdns:122]:     TXT: mac = a4f00f6919e8
+[13:46:54][V][mdns:122]:     TXT: platform = ESP32
+[13:46:54][V][mdns:122]:     TXT: board = esp32dev
+[13:46:54][V][mdns:122]:     TXT: network = wifi
+[13:46:54][V][mdns:122]:     TXT: project_name = james.retro-fujitsu
+[13:46:54][V][mdns:122]:     TXT: project_version = 3B.11
+[13:46:54][V][mdns:120]:   - _http, _tcp, 80
+[13:46:54][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:46:54][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:46:54][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:46:54][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:46:54][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:46:54][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:46:54][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:54][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:46:54][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:46:54][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:54][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:46:54][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:46:54][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:46:54][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:46:54][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:46:54][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:46:54][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:54][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:46:54][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:46:54][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:54][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:46:54][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:46:54][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:46:54][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:46:54][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:46:54][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:46:54][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:54][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:46:54][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:46:54][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:54][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (218 ms).
+[13:46:54][W][component:240]: Components should block for at most 30 ms.
+[13:46:54][C][esphome.ota:073]: Over-The-Air updates:
+[13:46:54][C][esphome.ota:074]:   Address: aircon.local:3232
+[13:46:54][C][esphome.ota:075]:   Version: 2
+[13:46:54][C][safe_mode:018]: Safe Mode:
+[13:46:54][C][safe_mode:020]:   Boot considered successful after 60 seconds
+[13:46:54][C][safe_mode:021]:   Invoke after 10 boot attempts
+[13:46:54][C][safe_mode:023]:   Remain in safe mode for 600 seconds
+[13:46:54][C][api:140]: API Server:
+[13:46:54][C][api:141]:   Address: aircon.local:6053
+[13:46:54][V][wifi_signal.sensor:010]:   Unique ID: 'a4f00f6919e8-wifisignal'
+[13:46:54][C][wifi_info:012]: WifiInfo SSID 'WiFi SSID'
+[13:46:54][V][wifi_info:012]:   Unique ID: 'a4f00f6919e8-wifiinfo-ssid'
+[13:46:55][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:46:55][D][climate:399]:   Mode: COOL
+[13:46:55][D][climate:401]:   Action: COOLING
+[13:46:55][D][climate:404]:   Fan Mode: MEDIUM
+[13:46:55][D][climate:419]:   Current Temperature: nan°C
+[13:46:55][D][climate:425]:   Target Temperature: 18.00°C
+[13:46:55][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:46:55][V][json:040]: Size after shrink 216 bytes
+[13:46:55][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:46:55][V][json:040]: Size after shrink 216 bytes
+[13:46:55][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:46:55][V][json:040]: Size after shrink 216 bytes
+[13:46:55][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (84 ms).
+[13:46:55][W][component:240]: Components should block for at most 30 ms.
+[13:46:55][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:46:55][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:46:55][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:46:55][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:46:55][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:46:55][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:46:55][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:55][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:46:55][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:46:55][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:46:55][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:46:55][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:46:55][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:46:55][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:46:55][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:46:55][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:46:55][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (256 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][status_led:050]: 'Status LED': Setting state ON
+[13:47:01][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:47:01][D][climate:399]:   Mode: COOL
+[13:47:01][D][climate:401]:   Action: COOLING
+[13:47:01][D][climate:404]:   Fan Mode: MEDIUM
+[13:47:01][D][climate:419]:   Current Temperature: nan°C
+[13:47:01][D][climate:425]:   Target Temperature: 18.00°C
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (106 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (82 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][status_led:050]: 'Status LED': Setting state OFF
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (74 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (88 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:47:01][D][climate:399]:   Mode: COOL
+[13:47:01][D][climate:401]:   Action: COOLING
+[13:47:01][D][climate:404]:   Fan Mode: MEDIUM
+[13:47:01][D][climate:419]:   Current Temperature: nan°C
+[13:47:01][D][climate:425]:   Target Temperature: 18.00°C
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (96 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (73 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (81 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][status_led:050]: 'Status LED': Setting state ON
+[13:47:01][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:47:01][D][climate:399]:   Mode: COOL
+[13:47:01][D][climate:401]:   Action: COOLING
+[13:47:01][D][climate:404]:   Fan Mode: MEDIUM
+[13:47:01][D][climate:419]:   Current Temperature: nan°C
+[13:47:01][D][climate:425]:   Target Temperature: 18.00°C
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (87 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (85 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][status_led:050]: 'Status LED': Setting state OFF
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (75 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:47:01][D][climate:399]:   Mode: COOL
+[13:47:01][D][climate:401]:   Action: COOLING
+[13:47:01][D][climate:404]:   Fan Mode: MEDIUM
+[13:47:01][D][climate:419]:   Current Temperature: nan°C
+[13:47:01][D][climate:425]:   Target Temperature: 18.00°C
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (119 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (107 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (79 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (67 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][status_led:050]: 'Status LED': Setting state ON
+[13:47:01][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:47:01][D][climate:399]:   Mode: COOL
+[13:47:01][D][climate:401]:   Action: COOLING
+[13:47:01][D][climate:404]:   Fan Mode: MEDIUM
+[13:47:01][D][climate:419]:   Current Temperature: nan°C
+[13:47:01][D][climate:425]:   Target Temperature: 18.00°C
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (68 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][status_led:050]: 'Status LED': Setting state OFF
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (141 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[13:47:01][D][climate:399]:   Mode: COOL
+[13:47:01][D][climate:401]:   Action: COOLING
+[13:47:01][D][climate:404]:   Fan Mode: MEDIUM
+[13:47:01][D][climate:419]:   Current Temperature: nan°C
+[13:47:01][D][climate:425]:   Target Temperature: 18.00°C
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][V][json:020]: Attempting to allocate 512 bytes for JSON serialization
+[13:47:01][V][json:040]: Size after shrink 216 bytes
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (90 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
+[13:47:01][D][fujitsu.heatpump:067]: UNIT  frame: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:105]: RAW [0xDF->0xDF]: FE DF DF 7F FF C4 E8 6B
+[13:47:01][D][fujitsu.heatpump:124]:   B3=0x7F B4=0xFF (fixed overhead)
+[13:47:01][D][fujitsu.heatpump:128]:   B5=0xC4  temp_raw=2 (->18°C) mode_nibble=3
+[13:47:01][D][fujitsu.heatpump:129]:   B6=0xE8  (mapping TBD)
+[13:47:01][I][fujitsu.heatpump:152]: State: pwr=ON mode=3 temp=18°C room=nan°C fan=3
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][D][fujitsu.heatpump:071]: CTRL  frame: CE FF FF 5F FF C4 E8 4B
+[13:47:01][I][fujitsu.heatpump:179]: CTRL decoded: pwr=ON fan=3 (CTRL0=0xCE)
+[13:47:01][D][fujitsu.climate:175]: State updated - Mode: 2, Target: 18.0°C, Current: nan°C
+[13:47:01][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (76 ms).
+[13:47:01][W][component:240]: Components should block for at most 30 ms.
