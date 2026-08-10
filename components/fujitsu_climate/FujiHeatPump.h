@@ -12,8 +12,8 @@ namespace fujitsu_climate {
 //       (unreality/FujiHeatPump, jaroslawprzybylowicz) which targeted other models.
 //
 // Observed 16-byte repeating cycle on the bus:
-//   FE DF DF 7F FF D6 EB 6B  ← Unit status frame (starts 0xFE, ends 0x6B)
-//   D1 FF FF 5F FF D6 EB 4B  ← Controller frame  (starts 0xD0-0xDE, ends 0x4B)
+//   FE DF DF 7F FF D6 EB 6B  <- Unit status frame (starts 0xFE, ends 0x6B)
+//   D1 FF FF 5F FF D6 EB 4B  <- Controller frame  (starts 0xD0-0xDE, ends 0x4B)
 //
 // The controller start byte lower nibble appears to toggle/vary (0xD0, 0xD1 seen).
 // Both frame types are 8 bytes.
@@ -125,6 +125,25 @@ class FujiHeatPump {
   // Timing
   uint32_t last_frame_time_{0};
   static const uint32_t FRAME_REPLY_DELAY_MS = 60;  // Reply 50-60ms after receiving
+
+  // --- Experimental corrected decode (added 10 Aug 2026, Session A) ---
+  // Hypothesis from comparing this project against other published Fujitsu LIN
+  // implementations (see project notes: upstream-comparison.md): every byte on the
+  // wire is inverted relative to how it's read above, and the meaningful 8-byte field
+  // window starts 2 bytes after the raw 0xFE sync byte, not at it. Applying that to the
+  // existing capture logs correctly reproduced fan speed and room temperature, which
+  // the decode above has never been able to read. This tracker runs independently of
+  // and in parallel with the parsing above — it only logs (ESP_LOGD, tag "CORR"), it
+  // does not feed on_off_/mode_/temperature_/fan_mode_ and is not wired to any HA
+  // entity. Promote it to the primary decode only after it's been checked against
+  // live button presses (see test-and-dev-workflow.md Session B) — this has so far
+  // only been validated against a re-read of old logs, not fresh hardware.
+  enum class CorrSyncState : uint8_t { SEEK_FE, SKIP_ONE, CAPTURE };
+  CorrSyncState corr_state_{CorrSyncState::SEEK_FE};
+  uint8_t corr_buf_[8];
+  uint8_t corr_index_{0};
+  void feedCorrectedSync(uint8_t raw_byte);
+  void processCorrectedFrame(const uint8_t *frame);
 };
 
 }  // namespace fujitsu_climate
