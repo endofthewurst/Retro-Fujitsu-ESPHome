@@ -65,20 +65,32 @@ bool FujiHeatPump::readFrame() {
       bool valid_ctrl = (start_byte != FRAME_START) && (end_byte == FRAME_END_CTRL);
 
       if (valid_unit || valid_ctrl) {
-        // Log frame type clearly for protocol capture
-        char hex_buf[3 * FRAME_LENGTH + 1];
-        for (size_t i = 0; i < FRAME_LENGTH; i++) {
-          snprintf(hex_buf + i * 3, 4, "%02X ", rx_buffer_[i]);
+        // Throttle the expensive per-frame dumps to 1/sec (added 10 Aug 2026): under
+        // real, continuous, valid bus traffic these fired on every single frame --
+        // several times a second -- and the string formatting cost was directly
+        // observed causing 65-85ms component-loop overruns (once 527ms), well past the
+        // 30ms budget. State decoding below is NOT gated -- only the logging is.
+        uint32_t now_ms = millis();
+        bool log_details = (now_ms - debug_log_last_ms_ >= 1000);
+        if (log_details) {
+          debug_log_last_ms_ = now_ms;
         }
-        hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+
+        if (log_details) {
+          // Log frame type clearly for protocol capture
+          char hex_buf[3 * FRAME_LENGTH + 1];
+          for (size_t i = 0; i < FRAME_LENGTH; i++) {
+            snprintf(hex_buf + i * 3, 4, "%02X ", rx_buffer_[i]);
+          }
+          hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+          ESP_LOGD(TAG, "%s  frame: %s", valid_unit ? "UNIT" : "CTRL", hex_buf);
+        }
 
         if (valid_unit) {
-          ESP_LOGD(TAG, "UNIT  frame: %s", hex_buf);
-          parseFrame(rx_buffer_, FRAME_LENGTH);
+          parseFrame(rx_buffer_, FRAME_LENGTH, log_details);
           expecting_ctrl_ = true;  // Next 8 bytes are the ctrl frame
         } else if (valid_ctrl) {
-          ESP_LOGD(TAG, "CTRL  frame: %s", hex_buf);
-          parseCTRLFrame(rx_buffer_, FRAME_LENGTH);
+          parseCTRLFrame(rx_buffer_, FRAME_LENGTH, log_details);
           expecting_ctrl_ = false;  // Ctrl frame consumed
         }
         last_frame_time_ = millis();
@@ -97,15 +109,17 @@ bool FujiHeatPump::readFrame() {
   return false;
 }
 
-void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
+void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len, bool log_details) {
   if (len < FRAME_LENGTH) {
     ESP_LOGW(TAG, "Frame too short: %d bytes", len);
     return;
   }
 
-  // --- Always dump the raw frame at DEBUG level for capture/analysis ---
+  // --- Dump the raw frame at DEBUG level for capture/analysis, throttled to 1/sec by
+  // the caller (see readFrame()) -- was unconditional, which under real live-bus
+  // traffic caused sustained component-loop overruns (added 10 Aug 2026). ---
   // Format: RAW [src->dst]: FE 21 10 09 06 00 33 EB
-  {
+  if (log_details) {
     char hex_buf[3 * FRAME_LENGTH + 1];
     for (size_t i = 0; i < FRAME_LENGTH; i++) {
       snprintf(hex_buf + i * 3, 4, "%02X ", frame[i]);
@@ -134,13 +148,15 @@ void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
   // upstream-comparison.md) runs in parallel via feedCorrectedSync()/processCorrectedFrame()
   // below, logged under tag "CORR" â€” it is not wired to state here pending live validation.
 
-  ESP_LOGD(TAG, "  B3=0x%02X B4=0x%02X (fixed overhead)",
-           frame[3], frame[4]);
-  ESP_LOGD(TAG, "  B5=0x%02X  temp_raw=%d (->%.0fÂ°C) mode_nibble=%d",
-           frame[5], (frame[5] >> 1) & 0x0F,
-           (float)((frame[5] >> 1) & 0x0F) + TEMP_OFFSET,
-           (~(frame[5] >> 4)) & 0x0F);
-  ESP_LOGD(TAG, "  B6=0x%02X  (mapping TBD)", frame[6]);
+  if (log_details) {
+    ESP_LOGD(TAG, "  B3=0x%02X B4=0x%02X (fixed overhead)",
+             frame[3], frame[4]);
+    ESP_LOGD(TAG, "  B5=0x%02X  temp_raw=%d (->%.0fÂ°C) mode_nibble=%d",
+             frame[5], (frame[5] >> 1) & 0x0F,
+             (float)((frame[5] >> 1) & 0x0F) + TEMP_OFFSET,
+             (~(frame[5] >> 4)) & 0x0F);
+    ESP_LOGD(TAG, "  B6=0x%02X  (mapping TBD)", frame[6]);
+  }
 
   // --- Decode fields from UNIT frame ---
 
@@ -161,12 +177,14 @@ void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
 
   // Note: power and fan are decoded from CTRL frame â€” see parseCTRLFrame().
   // Log whatever state we have (on_off_ and fan_mode_ may still be from last CTRL frame).
-  ESP_LOGI(TAG, "State: pwr=%s mode=%d temp=%.0fÂ°C room=%.0fÂ°C fan=%d",
-           on_off_ ? "ON" : "OFF", static_cast<int>(mode_),
-           temperature_, current_temperature_, static_cast<int>(fan_mode_));
+  if (log_details) {
+    ESP_LOGI(TAG, "State: pwr=%s mode=%d temp=%.0fÂ°C room=%.0fÂ°C fan=%d",
+             on_off_ ? "ON" : "OFF", static_cast<int>(mode_),
+             temperature_, current_temperature_, static_cast<int>(fan_mode_));
+  }
 }
 
-void FujiHeatPump::parseCTRLFrame(const uint8_t *frame, size_t len) {
+void FujiHeatPump::parseCTRLFrame(const uint8_t *frame, size_t len, bool log_details) {
   if (len < FRAME_LENGTH) return;
 
   // CTRL frame structure â€” ART30LUAK confirmed by live capture:
@@ -192,8 +210,10 @@ void FujiHeatPump::parseCTRLFrame(const uint8_t *frame, size_t len) {
     fan_mode_ = static_cast<FujiFanMode>(fan_raw);
   }
 
-  ESP_LOGI(TAG, "CTRL decoded: pwr=%s fan=%d (CTRL0=0x%02X)",
-           on_off_ ? "ON" : "OFF", static_cast<int>(fan_mode_), ctrl0);
+  if (log_details) {
+    ESP_LOGI(TAG, "CTRL decoded: pwr=%s fan=%d (CTRL0=0x%02X)",
+             on_off_ ? "ON" : "OFF", static_cast<int>(fan_mode_), ctrl0);
+  }
 }
 
 // --- Experimental corrected decode (added 10 Aug 2026, Session A) ---
