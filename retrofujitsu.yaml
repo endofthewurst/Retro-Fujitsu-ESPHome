@@ -1,4 +1,4 @@
-# Phase 3B: Fujitsu Protocol Integration - LISTEN MODE (hardware wired)
+﻿# Phase 3B: Fujitsu Protocol Integration - LISTEN MODE (hardware wired)
 # ESP32 connected as secondary slave on LIN bus via TJA1021/SIT1021T
 # UART on GPIO16 (RX) / GPIO17 (TX), 500 baud 8N1
 # Goal: capture and decode all bus traffic to build protocol map
@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.11"
+    version: "3B.12"
   on_boot:
     priority: 600
     then:
@@ -41,7 +41,7 @@ uart:
     number: GPIO16
     mode:
       input: true
-      pullup: true   # Critical: prevents RX float → garbage bytes → crash when bus disconnected
+      pullup: true   # Critical: prevents RX float â†’ garbage bytes â†’ crash when bus disconnected
   baud_rate: 500
   data_bits: 8
   parity: NONE
