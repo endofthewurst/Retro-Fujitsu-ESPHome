@@ -23,6 +23,10 @@ bool FujiHeatPump::readFrame() {
     uint8_t byte;
     if (!uart_->read_byte(&byte)) break;
 
+    // Bus-activity timestamp for the alive/dead diagnostic -- cheap integer write,
+    // deliberately placed before any logging (added 10 Aug 2026).
+    last_any_byte_time_ = millis();
+
     // Always log every raw byte at VERBOSE level for protocol capture/debug
     ESP_LOGV(TAG, "RX byte: 0x%02X", byte);
 
