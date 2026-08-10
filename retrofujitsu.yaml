@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.17"
+    version: "3B.18"
   on_boot:
     priority: 600
     then:
@@ -23,9 +23,14 @@ esp32:
   framework:
     type: arduino
 
-# Enable verbose logging to see protocol details
+# Logging: dropped from VERBOSE to DEBUG 11 Aug 2026 (3B.18). VERBOSE compiled in an
+# unconditional per-byte ESP_LOGV in FujiHeatPump::readFrame() that fired on every
+# single byte of continuous bus traffic (~50/sec) -- the leading suspect for the
+# binary_sensor.house_aircon_bus_alive flicker seen increasingly often in Session B,
+# same class of hot-path-logging problem as the earlier crash-loop fix. DEBUG still
+# keeps the throttled (1/sec) per-frame dumps below via the per-tag levels.
 logger:
-  level: VERBOSE
+  level: DEBUG
   baud_rate: 115200
   logs:
     fujitsu.heatpump: DEBUG
@@ -41,7 +46,7 @@ uart:
     number: GPIO16
     mode:
       input: true
-      pullup: true   # Critical: prevents RX float → garbage bytes → crash when bus disconnected
+      pullup: true   # Critical: prevents RX float -> garbage bytes -> crash when bus disconnected
   baud_rate: 500
   data_bits: 8
   parity: NONE
@@ -186,6 +191,15 @@ sensor:
     update_interval: 60s
     entity_category: diagnostic
 
+  - platform: fujitsu_climate
+    fujitsu_climate_id: fujitsu_hp
+    corrected_setpoint:
+      name: "Corrected Setpoint"
+      id: corrected_setpoint
+    corrected_room_temp:
+      name: "Corrected Room Temp"
+      id: corrected_room_temp
+
 # Text sensors
 text_sensor:
   - platform: wifi_info
@@ -211,18 +225,12 @@ text_sensor:
     corrected_fan_raw:
       name: "Corrected Fan Raw"
       id: corrected_fan_raw
-    corrected_setpoint:
-      name: "Corrected Setpoint"
-      id: corrected_setpoint
-    corrected_room_temp:
-      name: "Corrected Room Temp"
-      id: corrected_room_temp
     corrected_economy:
       name: "Corrected Economy"
       id: corrected_economy
-    corrected_thermo_sensor:
-      name: "Corrected Thermo Sensor"
-      id: corrected_thermo_sensor
+    mystery_bit:
+      name: "Mystery Bit"
+      id: mystery_bit
 
 # Binary sensors
 binary_sensor:

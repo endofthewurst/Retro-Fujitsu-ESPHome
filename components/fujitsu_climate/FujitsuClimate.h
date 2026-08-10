@@ -5,6 +5,7 @@
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
+#include "esphome/components/sensor/sensor.h"
 #include "FujiHeatPump.h"
 
 namespace esphome {
@@ -29,15 +30,15 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   void control(const climate::ClimateCall &call) override;
 
   // Bus health diagnostics (added 10 Aug 2026) -- optional, set only if configured
-  // in YAML via the fujitsu_climate binary_sensor/text_sensor platforms.
+  // in YAML via the fujitsu_climate binary_sensor/text_sensor/sensor platforms.
   void set_bus_alive_binary_sensor(binary_sensor::BinarySensor *s) { bus_alive_binary_sensor_ = s; }
   void set_bus_status_text_sensor(text_sensor::TextSensor *s) { bus_status_text_sensor_ = s; }
   void set_corrected_mode_text_sensor(text_sensor::TextSensor *s) { corrected_mode_text_sensor_ = s; }
   void set_corrected_fan_raw_text_sensor(text_sensor::TextSensor *s) { corrected_fan_raw_text_sensor_ = s; }
-  void set_corrected_setpoint_text_sensor(text_sensor::TextSensor *s) { corrected_setpoint_text_sensor_ = s; }
-  void set_corrected_room_temp_text_sensor(text_sensor::TextSensor *s) { corrected_room_temp_text_sensor_ = s; }
+  void set_corrected_setpoint_sensor(sensor::Sensor *s) { corrected_setpoint_sensor_ = s; }
+  void set_corrected_room_temp_sensor(sensor::Sensor *s) { corrected_room_temp_sensor_ = s; }
   void set_corrected_economy_text_sensor(text_sensor::TextSensor *s) { corrected_economy_text_sensor_ = s; }
-  void set_corrected_thermo_sensor_text_sensor(text_sensor::TextSensor *s) { corrected_thermo_sensor_text_sensor_ = s; }
+  void set_mystery_bit_text_sensor(text_sensor::TextSensor *s) { mystery_bit_text_sensor_ = s; }
   
  protected:
   FujiHeatPump hp_;
@@ -46,10 +47,14 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   text_sensor::TextSensor *bus_status_text_sensor_{nullptr};
   text_sensor::TextSensor *corrected_mode_text_sensor_{nullptr};
   text_sensor::TextSensor *corrected_fan_raw_text_sensor_{nullptr};
-  text_sensor::TextSensor *corrected_setpoint_text_sensor_{nullptr};
-  text_sensor::TextSensor *corrected_room_temp_text_sensor_{nullptr};
+  sensor::Sensor *corrected_setpoint_sensor_{nullptr};
+  sensor::Sensor *corrected_room_temp_sensor_{nullptr};
   text_sensor::TextSensor *corrected_economy_text_sensor_{nullptr};
-  text_sensor::TextSensor *corrected_thermo_sensor_text_sensor_{nullptr};
+  // Renamed from "Corrected Thermo Sensor" 11 Aug 2026 -- live testing didn't cleanly
+  // confirm this bit maps to the Thermo Sensor Local/Remote setting (see
+  // FujiHeatPump.h's getCorrMysteryBit() comment). Kept as a diagnostic until it's
+  // understood.
+  text_sensor::TextSensor *mystery_bit_text_sensor_{nullptr};
 
   // Bus-alive/status thresholds (ms) -- see update_bus_status_() for the logic.
   static constexpr uint32_t BUS_FRAME_TIMEOUT_MS = 2000;
@@ -57,9 +62,9 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
 
   void update_bus_status_();
 
-  // New-approach diagnostic (added 10 Aug 2026, Session B kickoff): mirrors the
-  // experimental corrected-decode's mode/fan fields to HA so they can be validated
-  // against real button presses -- see FujiHeatPump.h's corr_mode_raw_/corr_fan_raw_.
+  // Mirrors the corrected decode's raw fields to standalone diagnostic HA entities,
+  // in parallel with the same decode now driving the main climate entity's state
+  // (see update_climate_state()) -- lets the two be cross-checked against each other.
   void update_corrected_diagnostics_();
 
   // Throttles the `State updated` log in update_climate_state() to 1/sec (added 10

@@ -11,7 +11,7 @@ static const char *const TAG = "fujitsu.climate";
 constexpr uint32_t PUBLISH_INTERVAL_MS = 1000;
 
 FujitsuClimate::FujitsuClimate() : PollingComponent(PUBLISH_INTERVAL_MS) {
-  // Use NAN for temperatures — ESPHome/HA renders these as "unknown" until
+  // Use NAN for temperatures -- ESPHome/HA renders these as "unknown" until
   // real values arrive from the bus. Do NOT fabricate readings.
   target_temperature = NAN;
   current_temperature = NAN;
@@ -26,29 +26,27 @@ void FujitsuClimate::setup() {
   hp_.connect(this->parent_, true);
   hp_.setDebug(true);
 
-  ESP_LOGI(TAG, "Fujitsu Climate Phase 3B initialized — hardware connected, listen mode");
+  ESP_LOGI(TAG, "Fujitsu Climate Phase 3B initialized -- hardware connected, listen mode");
   ESP_LOGI(TAG, "Waiting for LIN bus frames on UART (500 baud 8N1)...");
 }
 
 void FujitsuClimate::loop() {
-  // Called every main-loop tick — drain all available frames immediately.
+  // Called every main-loop tick -- drain all available frames immediately.
   // This ensures no bus traffic is missed between HA publish intervals.
   while (hp_.readFrame()) {
     if (!hardware_present_) {
       hardware_present_ = true;
-      ESP_LOGI(TAG, "First frame received — hardware confirmed present");
+      ESP_LOGI(TAG, "First frame received -- hardware confirmed present");
     }
     update_climate_state();
   }
 
-  // Send any pending commands immediately after receiving
-  if (hardware_present_ && hp_.hasPendingFrame()) {
-    hp_.sendPendingFrame();
-  }
+  // NOTE (11 Aug 2026, 3B.18): sendPendingFrame() is intentionally never called here.
+  // See control() below for why TX is disabled.
 }
 
 void FujitsuClimate::update() {
-  // Called on interval (1 s) — just publish current state to Home Assistant
+  // Called on interval (1 s) -- just publish current state to Home Assistant
   if (hardware_present_) {
     publish_state();
   }
@@ -91,8 +89,8 @@ void FujitsuClimate::update_bus_status_() {
 
 void FujitsuClimate::update_corrected_diagnostics_() {
   if (corrected_mode_text_sensor_ == nullptr && corrected_fan_raw_text_sensor_ == nullptr &&
-      corrected_setpoint_text_sensor_ == nullptr && corrected_room_temp_text_sensor_ == nullptr &&
-      corrected_economy_text_sensor_ == nullptr && corrected_thermo_sensor_text_sensor_ == nullptr) {
+      corrected_setpoint_sensor_ == nullptr && corrected_room_temp_sensor_ == nullptr &&
+      corrected_economy_text_sensor_ == nullptr && mystery_bit_text_sensor_ == nullptr) {
     return;  // Not configured in YAML -- nothing to do.
   }
 
@@ -129,28 +127,25 @@ void FujitsuClimate::update_corrected_diagnostics_() {
     }
   }
 
-  if (corrected_setpoint_text_sensor_ != nullptr) {
+  // Setpoint / room temp are now numeric sensors (converted from text 11 Aug 2026,
+  // 3B.18) -- the underlying data is always whole degrees C (see the frame layout
+  // comment in FujiHeatPump.cpp's processCorrectedFrame()), so there's no fractional
+  // precision being discarded here. NAN publishes as "unknown" in HA, same meaning as
+  // the old "No Data"/"None" text values.
+  if (corrected_setpoint_sensor_ != nullptr) {
     if (!have_corr) {
-      corrected_setpoint_text_sensor_->publish_state("No Data");
+      corrected_setpoint_sensor_->publish_state(NAN);
     } else {
       uint8_t sp = hp_.getCorrSetpointRaw();
-      char buf[16];
-      if (sp == 0) {
-        snprintf(buf, sizeof(buf), "None");
-      } else {
-        snprintf(buf, sizeof(buf), "%dC", sp);
-      }
-      corrected_setpoint_text_sensor_->publish_state(buf);
+      corrected_setpoint_sensor_->publish_state(sp == 0 ? NAN : static_cast<float>(sp));
     }
   }
 
-  if (corrected_room_temp_text_sensor_ != nullptr) {
+  if (corrected_room_temp_sensor_ != nullptr) {
     if (!have_corr) {
-      corrected_room_temp_text_sensor_->publish_state("No Data");
+      corrected_room_temp_sensor_->publish_state(NAN);
     } else {
-      char buf[16];
-      snprintf(buf, sizeof(buf), "%dC", hp_.getCorrRoomTempRaw());
-      corrected_room_temp_text_sensor_->publish_state(buf);
+      corrected_room_temp_sensor_->publish_state(static_cast<float>(hp_.getCorrRoomTempRaw()));
     }
   }
 
@@ -162,12 +157,12 @@ void FujitsuClimate::update_corrected_diagnostics_() {
     }
   }
 
-  if (corrected_thermo_sensor_text_sensor_ != nullptr) {
+  if (mystery_bit_text_sensor_ != nullptr) {
     if (!have_corr) {
-      corrected_thermo_sensor_text_sensor_->publish_state("No Data");
+      mystery_bit_text_sensor_->publish_state("No Data");
     } else {
-      // Raw bit, not yet mapped to Local/Remote -- see FujiHeatPump.h getter comment.
-      corrected_thermo_sensor_text_sensor_->publish_state(hp_.getCorrThermoSensorBit() ? "Bit=1" : "Bit=0");
+      // Raw bit, not mapped to any label -- see FujiHeatPump.h's getCorrMysteryBit().
+      mystery_bit_text_sensor_->publish_state(hp_.getCorrMysteryBit() ? "Bit=1" : "Bit=0");
     }
   }
 }
@@ -177,6 +172,7 @@ void FujitsuClimate::dump_config() {
   ESP_LOGCONFIG(TAG, "  Hardware present: %s", hardware_present_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Controller: Secondary");
   ESP_LOGCONFIG(TAG, "  LIN Interface: TJA1021");
+  ESP_LOGCONFIG(TAG, "  TX: DISABLED (read-only monitoring; see control())");
 }
 
 climate::ClimateTraits FujitsuClimate::traits() {
@@ -201,6 +197,14 @@ climate::ClimateTraits FujitsuClimate::traits() {
       climate::CLIMATE_FAN_QUIET,
   });
 
+  // Economy, wired as a preset (added 11 Aug 2026, 3B.18) -- reflects
+  // corr_economy_/getCorrEconomy(), validated live in Session B via a clean 43s
+  // OFF->ON->OFF toggle.
+  traits.set_supported_presets({
+      climate::CLIMATE_PRESET_NONE,
+      climate::CLIMATE_PRESET_ECO,
+  });
+
   // Temperature settings
   traits.set_supports_current_temperature(true);
   traits.set_visual_min_temperature(16.0f);
@@ -215,36 +219,22 @@ climate::ClimateTraits FujitsuClimate::traits() {
 }
 
 void FujitsuClimate::control(const climate::ClimateCall &call) {
-  ESP_LOGD(TAG, "Climate control called");
-
-  if (!hardware_present_) {
-    ESP_LOGW(TAG, "Hardware not present - ignoring control commands");
-    return;
-  }
-
-  // Handle mode changes
-  if (call.get_mode().has_value()) {
-    climate::ClimateMode m = *call.get_mode();
-    if (m == climate::CLIMATE_MODE_OFF) {
-      hp_.setOnOff(false);
-    } else {
-      hp_.setOnOff(true);
-      hp_.setMode(climate_mode_to_fuji_mode(m));
-    }
-  }
-
-  // Handle target temperature
-  if (call.get_target_temperature().has_value()) {
-    hp_.setTemperature(*call.get_target_temperature());
-  }
-
-  // Handle fan mode
-  if (call.get_fan_mode().has_value()) {
-    hp_.setFanMode(climate_fan_to_fuji_fan(*call.get_fan_mode()));
-  }
-
-  // Update state immediately
-  update_climate_state();
+  // TX (Phase 2) has never been implemented against the real bus -- buildFrame() in
+  // FujiHeatPump.cpp is still an explicit "GUESS" at the command frame shape, never
+  // tested live. hardware-and-protocol.md's "ESP32 is never the boss" design
+  // principle requires the wired UTY-RNNUM controller to remain the one actually in
+  // control until Phase 2 transmit is built and validated per
+  // plan-to-completion.md's test plan (setpoint first, then fan, mode, power, each
+  // checked against the physical display). Letting an unvalidated guessed frame reach
+  // the live, working heat pump risks exactly the "controllers disagree" failure mode
+  // Phase 2 exists to catch under controlled conditions.
+  //
+  // As of 11 Aug 2026 (3B.18) this climate entity is READ-ONLY: any command from HA
+  // (mode, temperature, fan, preset) is logged and ignored rather than sent to
+  // FujiHeatPump's setters. Re-enable by wiring these back to hp_.setOnOff() /
+  // setMode() / setTemperature() / setFanMode() once Phase 2 TX is implemented and
+  // tested.
+  ESP_LOGW(TAG, "Climate control request ignored -- TX disabled pending Phase 2 validation (read-only monitoring only)");
 }
 
 void FujitsuClimate::update_climate_state() {
@@ -266,6 +256,9 @@ void FujitsuClimate::update_climate_state() {
 
   // Update fan mode
   fan_mode = fuji_fan_to_climate_fan(hp_.getFanMode());
+
+  // Update preset from economy (added 11 Aug 2026, 3B.18)
+  preset = hp_.getCorrEconomy() ? climate::CLIMATE_PRESET_ECO : climate::CLIMATE_PRESET_NONE;
 
   // Update action
   if (!hp_.getOnOff()) {
@@ -293,7 +286,7 @@ void FujitsuClimate::update_climate_state() {
   uint32_t now_ms = millis();
   if (now_ms - state_log_last_ms_ >= 1000) {
     state_log_last_ms_ = now_ms;
-    ESP_LOGD(TAG, "State updated - Mode: %d, Target: %.1f°C, Current: %.1f°C",
+    ESP_LOGD(TAG, "State updated - Mode: %d, Target: %.1fdegC, Current: %.1fdegC",
              mode, target_temperature, current_temperature);
   }
 }

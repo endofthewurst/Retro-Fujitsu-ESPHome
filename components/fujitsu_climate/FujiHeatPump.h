@@ -24,9 +24,12 @@ static const uint8_t FRAME_END_CTRL = 0x4B;        // Controller frame end marke
 static const uint8_t FRAME_CTRL_START_NIBBLE = 0xD0; // Controller frame start: upper byte = 0xD, lower = varies
 static const uint8_t FRAME_LENGTH = 8;
 
-// Target temperature encoding: stored value = (°C - TEMP_OFFSET), range [0, TEMP_RAW_MAX]
+// Target temperature encoding: stored value = (degC - TEMP_OFFSET), range [0, TEMP_RAW_MAX]
+// NOTE: retained for the old/deprecated decode below. The corrected decode (which now
+// drives the live climate entity, as of 11 Aug 2026 / 3B.18) reads setpoint directly in
+// whole degrees C with no offset -- see processCorrectedFrame().
 static const uint8_t TEMP_OFFSET = 16;
-static const uint8_t TEMP_RAW_MAX = 14;  // 14 + 16 = 30°C (upper visual limit)
+static const uint8_t TEMP_RAW_MAX = 14;  // 14 + 16 = 30degC (upper visual limit)
 
 // Sanity ceiling for room-temperature readings
 static const float ROOM_TEMP_MAX_C = 50.0f;
@@ -37,7 +40,10 @@ enum class ControllerType : uint8_t {
   SECONDARY = 0x01,
 };
 
-// Operating modes (from unreality/FujiHeatPump)
+// Operating modes (from unreality/FujiHeatPump). Values are deliberately aligned with
+// the corrected decode's frame[3] bits[3:1] field (1=Fan..5=Auto) so that
+// processCorrectedFrame() can cast its decoded raw mode straight into this enum --
+// see the corrected-decode section below.
 enum class FujiMode : uint8_t {
   UNKNOWN = 0,
   FAN = 1,
@@ -47,7 +53,12 @@ enum class FujiMode : uint8_t {
   MODE_AUTO = 5,
 };
 
-// Fan modes (from unreality/FujiHeatPump)
+// Fan modes (from unreality/FujiHeatPump). Values are deliberately aligned with the
+// corrected decode's frame[3] bits[6:4] field. Confirmed live against a full
+// High->Medium->Low->Auto cycle on the physical remote, 11 Aug 2026 (Session B):
+// Auto=0, Low=2, Medium=3, High=4 all matched the display in lockstep. Quiet=1 has
+// not yet been exercised live -- kept in the enum on the strength of the observed
+// AUTO/LOW/MED/HIGH spacing, not yet independently confirmed.
 enum class FujiFanMode : uint8_t {
   FAN_AUTO = 0,
   QUIET = 1,
@@ -63,16 +74,26 @@ class FujiHeatPump {
   // Initialize connection
   void connect(uart::UARTComponent *uart, bool secondary);
   
-  // Frame reading (non-blocking — call from loop())
+  // Frame reading (non-blocking -- call from loop())
   bool readFrame();
   
-  // State setters (prepare frame for sending)
+  // State setters (prepare frame for sending). NOTE: as of 3B.18 these are no longer
+  // called from FujitsuClimate::control() -- see that file's comment. buildFrame()'s
+  // output has never been validated against the live bus (still an explicit "GUESS",
+  // see buildFrame() below) and the project's "ESP32 is never the boss" design
+  // principle (hardware-and-protocol.md) requires that not go out on the wire until
+  // Phase 2 transmit is implemented and tested per plan-to-completion.md. Left in
+  // place, unused for now, for when that work happens.
   void setOnOff(bool on);
   void setMode(FujiMode mode);
   void setTemperature(float temp);
   void setFanMode(FujiFanMode fan);
   
-  // State getters (from received frames)
+  // State getters (from received frames). As of 3B.18, these are populated from the
+  // corrected decode (see processCorrectedFrame()) rather than the old parseFrame()/
+  // parseCTRLFrame() below -- promoted to primary after Session B validated the
+  // corrected decode live against real button presses for every field here (power,
+  // mode, fan, setpoint) and found the old decode wrong or stuck on all of them.
   bool getOnOff() const { return on_off_; }
   FujiMode getMode() const { return mode_; }
   float getTemperature() const { return temperature_; }
@@ -98,23 +119,24 @@ class FujiHeatPump {
   uint32_t getLastFrameTime() const { return last_frame_time_; }
   uint32_t getLastByteTime() const { return last_any_byte_time_; }
 
-  // Live mirror of the experimental corrected decode (added 10 Aug 2026, Session B
-  // kickoff) -- exposed as new diagnostic HA entities (Corrected Mode / Corrected Fan
-  // Raw) so the corrected-decode hypothesis can be checked against real button presses
-  // without touching the proven mode_/fan_mode_ used by the live climate entity above.
-  // 0xFF means "no corrected frame decoded yet".
+  // Live mirror of the corrected decode (added 10 Aug 2026, Session B kickoff;
+  // promoted to the primary decode 11 Aug 2026, 3B.18) -- exposed as diagnostic HA
+  // entities in parallel with the values now feeding the main climate entity above,
+  // so the two can be cross-checked. 0xFF means "no corrected frame decoded yet".
   uint8_t getCorrModeRaw() const { return corr_mode_raw_; }
   uint8_t getCorrFanRaw() const { return corr_fan_raw_; }
   uint32_t getCorrLastUpdateTime() const { return corr_last_update_ms_; }
   uint8_t getCorrSetpointRaw() const { return corr_setpoint_raw_; }
   uint8_t getCorrRoomTempRaw() const { return corr_room_temp_raw_; }
   bool getCorrEconomy() const { return corr_economy_; }
-  // Candidate bit for the Fujitsu ''Thermo Sensor'' setting (Room sensor vs a
-  // separate air-handler sensor) -- per the manual, this selects which sensor the
-  // indoor unit trusts for its own control loop. frame[6] bit0 (''controller-present''
-  // per upstream-comparison.md) is the leading candidate; exposed raw, unmapped to
-  // Local/Remote labels, until confirmed live (added 11 Aug 2026).
-  bool getCorrThermoSensorBit() const { return corr_thermo_sensor_bit_; }
+  // Candidate bit hypothesized (per the Fujitsu manual's description of the "Thermo
+  // Sensor" Local/Remote setting) to be frame[6] bit0. Live testing on 11 Aug 2026
+  // did NOT cleanly confirm this -- the bit was observed not moving at all across two
+  // separate button presses, then moving once in a way whose direction didn't
+  // obviously match the stated action. Renamed from "Corrected Thermo Sensor" to
+  // "Mystery Bit" pending further investigation -- do not treat this as a trusted
+  // Thermo Sensor readout yet.
+  bool getCorrMysteryBit() const { return corr_mystery_bit_; }
   
  protected:
   uart::UARTComponent *uart_{nullptr};
@@ -122,7 +144,8 @@ class FujiHeatPump {
   bool connected_{false};
   bool debug_{false};
   
-  // Current state (from bus) — NAN until first frame received
+  // Current state (from bus) -- NAN until first frame received. As of 3B.18, written
+  // by processCorrectedFrame() below, not by parseFrame()/parseCTRLFrame().
   bool on_off_{false};
   FujiMode mode_{FujiMode::MODE_AUTO};
   float temperature_{NAN};
@@ -141,11 +164,13 @@ class FujiHeatPump {
   uint8_t tx_buffer_[32];
   size_t rx_index_{0};
   
-  // Parse received frames
+  // Parse received frames -- retained for frame-structure sync (used by the Bus
+  // Alive/Bus Status diagnostics) and for legacy debug logging. As of 3B.18 these no
+  // longer write on_off_/mode_/temperature_/fan_mode_ -- see processCorrectedFrame().
   // log_details gates the expensive per-frame ESP_LOGD/LOGI dumps (see readFrame()) --
   // added 10 Aug 2026 after real live-bus traffic showed these firing on every single
   // frame (several times/sec) caused sustained 65-85ms component-loop overruns, once a
-  // 527ms spike. State decoding itself always runs regardless of log_details.
+  // 527ms spike. Frame-structure sync itself always runs regardless of log_details.
   void parseFrame(const uint8_t *frame, size_t len, bool log_details);      // UNIT frame (FE...6B)
   void parseCTRLFrame(const uint8_t *frame, size_t len, bool log_details);  // CTRL frame (??...4B)
 
@@ -158,18 +183,18 @@ class FujiHeatPump {
   uint32_t debug_log_last_ms_{0};  // throttles the per-frame debug/info dumps to 1/sec (added 10 Aug 2026)
   static const uint32_t FRAME_REPLY_DELAY_MS = 60;  // Reply 50-60ms after receiving
 
-  // --- Experimental corrected decode (added 10 Aug 2026, Session A) ---
+  // --- Corrected decode (added 10 Aug 2026, Session A; promoted to primary 11 Aug
+  // 2026, 3B.18) ---
   // Hypothesis from comparing this project against other published Fujitsu LIN
   // implementations (see project notes: upstream-comparison.md): every byte on the
-  // wire is inverted relative to how it's read above, and the meaningful 8-byte field
-  // window starts 2 bytes after the raw 0xFE sync byte, not at it. Applying that to the
-  // existing capture logs correctly reproduced fan speed and room temperature, which
-  // the decode above has never been able to read. This tracker runs independently of
-  // and in parallel with the parsing above — it only logs (ESP_LOGD, tag "CORR"), it
-  // does not feed on_off_/mode_/temperature_/fan_mode_ and is not wired to any HA
-  // entity. Promote it to the primary decode only after it's been checked against
-  // live button presses (see test-and-dev-workflow.md Session B) — this has so far
-  // only been validated against a re-read of old logs, not fresh hardware.
+  // wire is inverted relative to how the old decode above reads it, and the meaningful
+  // 8-byte field window starts 2 bytes after the raw 0xFE sync byte, not at it. Session
+  // B (10-11 Aug 2026) validated this live against real button presses for power,
+  // mode (all 5), fan speed (4 of 5), setpoint, and economy -- all correct, while the
+  // old decode above was wrong or stuck on every one of them. It now feeds
+  // on_off_/mode_/temperature_/current_temperature_/fan_mode_ directly (see
+  // processCorrectedFrame()) and is also mirrored to standalone diagnostic HA entities
+  // for cross-checking.
   enum class CorrSyncState : uint8_t { SEEK_FE, SKIP_ONE, CAPTURE };
   CorrSyncState corr_state_{CorrSyncState::SEEK_FE};
   uint8_t corr_buf_[8];
@@ -181,7 +206,7 @@ class FujiHeatPump {
   uint8_t corr_setpoint_raw_{0};   // last decoded corrected setpoint, degC (0 = none, e.g. FAN mode)
   uint8_t corr_room_temp_raw_{0};  // last decoded corrected room/controller temp, degC
   bool corr_economy_{false};       // last decoded corrected economy-mode flag
-  bool corr_thermo_sensor_bit_{false};  // frame[6] bit0 mirror -- see getter comment above
+  bool corr_mystery_bit_{false};  // frame[6] bit0 -- see getCorrMysteryBit() comment above
   void feedCorrectedSync(uint8_t raw_byte);
   void processCorrectedFrame(const uint8_t *frame);
 };
