@@ -1,5 +1,6 @@
-﻿#include "FujitsuClimate.h"
+#include "FujitsuClimate.h"
 #include "esphome/core/log.h"
+#include <cstdio>
 
 namespace esphome {
 namespace fujitsu_climate {
@@ -10,7 +11,7 @@ static const char *const TAG = "fujitsu.climate";
 constexpr uint32_t PUBLISH_INTERVAL_MS = 1000;
 
 FujitsuClimate::FujitsuClimate() : PollingComponent(PUBLISH_INTERVAL_MS) {
-  // Use NAN for temperatures â€” ESPHome/HA renders these as "unknown" until
+  // Use NAN for temperatures — ESPHome/HA renders these as "unknown" until
   // real values arrive from the bus. Do NOT fabricate readings.
   target_temperature = NAN;
   current_temperature = NAN;
@@ -25,17 +26,17 @@ void FujitsuClimate::setup() {
   hp_.connect(this->parent_, true);
   hp_.setDebug(true);
 
-  ESP_LOGI(TAG, "Fujitsu Climate Phase 3B initialized â€” hardware connected, listen mode");
+  ESP_LOGI(TAG, "Fujitsu Climate Phase 3B initialized — hardware connected, listen mode");
   ESP_LOGI(TAG, "Waiting for LIN bus frames on UART (500 baud 8N1)...");
 }
 
 void FujitsuClimate::loop() {
-  // Called every main-loop tick â€” drain all available frames immediately.
+  // Called every main-loop tick — drain all available frames immediately.
   // This ensures no bus traffic is missed between HA publish intervals.
   while (hp_.readFrame()) {
     if (!hardware_present_) {
       hardware_present_ = true;
-      ESP_LOGI(TAG, "First frame received â€” hardware confirmed present");
+      ESP_LOGI(TAG, "First frame received — hardware confirmed present");
     }
     update_climate_state();
   }
@@ -47,7 +48,7 @@ void FujitsuClimate::loop() {
 }
 
 void FujitsuClimate::update() {
-  // Called on interval (1 s) â€” just publish current state to Home Assistant
+  // Called on interval (1 s) — just publish current state to Home Assistant
   if (hardware_present_) {
     publish_state();
   }
@@ -56,6 +57,7 @@ void FujitsuClimate::update() {
   // point, they need to report "No Signal" even before the first valid frame ever
   // arrives, not just stay silent forever.
   update_bus_status_();
+  update_corrected_diagnostics_();
 }
 
 void FujitsuClimate::update_bus_status_() {
@@ -84,6 +86,45 @@ void FujitsuClimate::update_bus_status_() {
       status = "No Signal";
     }
     bus_status_text_sensor_->publish_state(status);
+  }
+}
+
+void FujitsuClimate::update_corrected_diagnostics_() {
+  if (corrected_mode_text_sensor_ == nullptr && corrected_fan_raw_text_sensor_ == nullptr) {
+    return;  // Not configured in YAML -- nothing to do.
+  }
+
+  uint32_t last_corr = hp_.getCorrLastUpdateTime();
+  bool have_corr = (last_corr != 0) && (millis() - last_corr < BUS_FRAME_TIMEOUT_MS);
+
+  if (corrected_mode_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      corrected_mode_text_sensor_->publish_state("No Data");
+    } else {
+      uint8_t m = hp_.getCorrModeRaw();
+      const char *label;
+      switch (m) {
+        case 1: label = "Fan"; break;
+        case 2: label = "Dry"; break;
+        case 3: label = "Cool"; break;
+        case 4: label = "Heat"; break;
+        case 5: label = "Auto"; break;
+        default: label = "Unknown"; break;
+      }
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%s (raw=%d)", label, m);
+      corrected_mode_text_sensor_->publish_state(buf);
+    }
+  }
+
+  if (corrected_fan_raw_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      corrected_fan_raw_text_sensor_->publish_state("No Data");
+    } else {
+      char buf[8];
+      snprintf(buf, sizeof(buf), "%d", hp_.getCorrFanRaw());
+      corrected_fan_raw_text_sensor_->publish_state(buf);
+    }
   }
 }
 
@@ -208,7 +249,7 @@ void FujitsuClimate::update_climate_state() {
   uint32_t now_ms = millis();
   if (now_ms - state_log_last_ms_ >= 1000) {
     state_log_last_ms_ = now_ms;
-    ESP_LOGD(TAG, "State updated - Mode: %d, Target: %.1fÂ°C, Current: %.1fÂ°C",
+    ESP_LOGD(TAG, "State updated - Mode: %d, Target: %.1f°C, Current: %.1f°C",
              mode, target_temperature, current_temperature);
   }
 }
