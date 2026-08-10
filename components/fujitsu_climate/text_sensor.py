@@ -11,6 +11,7 @@ CONF_CORRECTED_FAN_RAW = "corrected_fan_raw"
 CONF_CORRECTED_SETPOINT = "corrected_setpoint"
 CONF_CORRECTED_ROOM_TEMP = "corrected_room_temp"
 CONF_CORRECTED_ECONOMY = "corrected_economy"
+CONF_CORRECTED_THERMO_SENSOR = "corrected_thermo_sensor"
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -39,6 +40,10 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:flask-outline",
         ),
+        cv.Optional(CONF_CORRECTED_THERMO_SENSOR): text_sensor.text_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:flask-outline",
+        ),
     }
 )
 
@@ -63,3 +68,6 @@ async def to_code(config):
     if CONF_CORRECTED_ECONOMY in config:
         sens = await text_sensor.new_text_sensor(config[CONF_CORRECTED_ECONOMY])
         cg.add(parent.set_corrected_economy_text_sensor(sens))
+    if CONF_CORRECTED_THERMO_SENSOR in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_CORRECTED_THERMO_SENSOR])
+        cg.add(parent.set_corrected_thermo_sensor_text_sensor(sens))

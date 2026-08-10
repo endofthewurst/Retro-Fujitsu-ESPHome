@@ -92,7 +92,7 @@ void FujitsuClimate::update_bus_status_() {
 void FujitsuClimate::update_corrected_diagnostics_() {
   if (corrected_mode_text_sensor_ == nullptr && corrected_fan_raw_text_sensor_ == nullptr &&
       corrected_setpoint_text_sensor_ == nullptr && corrected_room_temp_text_sensor_ == nullptr &&
-      corrected_economy_text_sensor_ == nullptr) {
+      corrected_economy_text_sensor_ == nullptr && corrected_thermo_sensor_text_sensor_ == nullptr) {
     return;  // Not configured in YAML -- nothing to do.
   }
 
@@ -159,6 +159,15 @@ void FujitsuClimate::update_corrected_diagnostics_() {
       corrected_economy_text_sensor_->publish_state("No Data");
     } else {
       corrected_economy_text_sensor_->publish_state(hp_.getCorrEconomy() ? "ON" : "OFF");
+    }
+  }
+
+  if (corrected_thermo_sensor_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      corrected_thermo_sensor_text_sensor_->publish_state("No Data");
+    } else {
+      // Raw bit, not yet mapped to Local/Remote -- see FujiHeatPump.h getter comment.
+      corrected_thermo_sensor_text_sensor_->publish_state(hp_.getCorrThermoSensorBit() ? "Bit=1" : "Bit=0");
     }
   }
 }

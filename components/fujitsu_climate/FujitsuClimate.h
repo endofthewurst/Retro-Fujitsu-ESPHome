@@ -37,6 +37,7 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   void set_corrected_setpoint_text_sensor(text_sensor::TextSensor *s) { corrected_setpoint_text_sensor_ = s; }
   void set_corrected_room_temp_text_sensor(text_sensor::TextSensor *s) { corrected_room_temp_text_sensor_ = s; }
   void set_corrected_economy_text_sensor(text_sensor::TextSensor *s) { corrected_economy_text_sensor_ = s; }
+  void set_corrected_thermo_sensor_text_sensor(text_sensor::TextSensor *s) { corrected_thermo_sensor_text_sensor_ = s; }
   
  protected:
   FujiHeatPump hp_;
@@ -48,6 +49,7 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   text_sensor::TextSensor *corrected_setpoint_text_sensor_{nullptr};
   text_sensor::TextSensor *corrected_room_temp_text_sensor_{nullptr};
   text_sensor::TextSensor *corrected_economy_text_sensor_{nullptr};
+  text_sensor::TextSensor *corrected_thermo_sensor_text_sensor_{nullptr};
 
   // Bus-alive/status thresholds (ms) -- see update_bus_status_() for the logic.
   static constexpr uint32_t BUS_FRAME_TIMEOUT_MS = 2000;

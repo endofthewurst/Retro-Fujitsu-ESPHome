@@ -109,6 +109,12 @@ class FujiHeatPump {
   uint8_t getCorrSetpointRaw() const { return corr_setpoint_raw_; }
   uint8_t getCorrRoomTempRaw() const { return corr_room_temp_raw_; }
   bool getCorrEconomy() const { return corr_economy_; }
+  // Candidate bit for the Fujitsu ''Thermo Sensor'' setting (Room sensor vs a
+  // separate air-handler sensor) -- per the manual, this selects which sensor the
+  // indoor unit trusts for its own control loop. frame[6] bit0 (''controller-present''
+  // per upstream-comparison.md) is the leading candidate; exposed raw, unmapped to
+  // Local/Remote labels, until confirmed live (added 11 Aug 2026).
+  bool getCorrThermoSensorBit() const { return corr_thermo_sensor_bit_; }
   
  protected:
   uart::UARTComponent *uart_{nullptr};
@@ -175,6 +181,7 @@ class FujiHeatPump {
   uint8_t corr_setpoint_raw_{0};   // last decoded corrected setpoint, degC (0 = none, e.g. FAN mode)
   uint8_t corr_room_temp_raw_{0};  // last decoded corrected room/controller temp, degC
   bool corr_economy_{false};       // last decoded corrected economy-mode flag
+  bool corr_thermo_sensor_bit_{false};  // frame[6] bit0 mirror -- see getter comment above
   void feedCorrectedSync(uint8_t raw_byte);
   void processCorrectedFrame(const uint8_t *frame);
 };
