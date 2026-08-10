@@ -90,7 +90,9 @@ void FujitsuClimate::update_bus_status_() {
 }
 
 void FujitsuClimate::update_corrected_diagnostics_() {
-  if (corrected_mode_text_sensor_ == nullptr && corrected_fan_raw_text_sensor_ == nullptr) {
+  if (corrected_mode_text_sensor_ == nullptr && corrected_fan_raw_text_sensor_ == nullptr &&
+      corrected_setpoint_text_sensor_ == nullptr && corrected_room_temp_text_sensor_ == nullptr &&
+      corrected_economy_text_sensor_ == nullptr) {
     return;  // Not configured in YAML -- nothing to do.
   }
 
@@ -124,6 +126,39 @@ void FujitsuClimate::update_corrected_diagnostics_() {
       char buf[8];
       snprintf(buf, sizeof(buf), "%d", hp_.getCorrFanRaw());
       corrected_fan_raw_text_sensor_->publish_state(buf);
+    }
+  }
+
+  if (corrected_setpoint_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      corrected_setpoint_text_sensor_->publish_state("No Data");
+    } else {
+      uint8_t sp = hp_.getCorrSetpointRaw();
+      char buf[16];
+      if (sp == 0) {
+        snprintf(buf, sizeof(buf), "None");
+      } else {
+        snprintf(buf, sizeof(buf), "%dC", sp);
+      }
+      corrected_setpoint_text_sensor_->publish_state(buf);
+    }
+  }
+
+  if (corrected_room_temp_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      corrected_room_temp_text_sensor_->publish_state("No Data");
+    } else {
+      char buf[16];
+      snprintf(buf, sizeof(buf), "%dC", hp_.getCorrRoomTempRaw());
+      corrected_room_temp_text_sensor_->publish_state(buf);
+    }
+  }
+
+  if (corrected_economy_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      corrected_economy_text_sensor_->publish_state("No Data");
+    } else {
+      corrected_economy_text_sensor_->publish_state(hp_.getCorrEconomy() ? "ON" : "OFF");
     }
   }
 }

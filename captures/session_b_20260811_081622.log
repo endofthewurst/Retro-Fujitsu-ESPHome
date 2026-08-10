@@ -1,0 +1,530 @@
+[08:16:24][I][app:100]: ESPHome version 2025.4.2 compiled on Aug 10 2026, 19:53:58
+[08:16:24][I][app:102]: Project james.retro-fujitsu version 3B.15
+[08:16:24][C][status_led:065]: Status Led Light:
+[08:16:24][C][status_led:066]:   Pin: GPIO2
+[08:16:24][C][wifi:600]: WiFi:
+[08:16:24][C][wifi:428]:   Local MAC: A4:F0:0F:69:19:E8
+[08:16:24][C][wifi:433]:   SSID: 'moose'
+[08:16:24][C][wifi:436]:   IP Address: 192.168.1.39
+[08:16:24][C][wifi:440]:   BSSID: 00:11:32:84:54:AF
+[08:16:24][C][wifi:441]:   Hostname: 'aircon'
+[08:16:24][C][wifi:443]:   Signal strength: -69 dB ▂▄▆█
+[08:16:24][V][wifi:445]:   Priority: -4.0
+[08:16:24][C][wifi:447]:   Channel: 2
+[08:16:24][C][wifi:448]:   Subnet: 255.255.255.0
+[08:16:24][C][wifi:449]:   Gateway: 192.168.1.1
+[08:16:24][C][wifi:450]:   DNS1: 192.168.1.1
+[08:16:24][C][wifi:451]:   DNS2: 0.0.0.0
+[08:16:24][C][logger:177]: Logger:
+[08:16:24][C][logger:178]:   Max Level: VERBOSE
+[08:16:24][C][logger:179]:   Initial Level: VERBOSE
+[08:16:24][C][logger:181]:   Log Baud Rate: 115200
+[08:16:24][C][logger:182]:   Hardware UART: UART0
+[08:16:24][C][logger:186]:   Level for 'fujitsu.climate': DEBUG
+[08:16:24][C][logger:186]:   Level for 'fujitsu.heatpump': DEBUG
+[08:16:24][C][logger:186]:   Level for 'uart': WARN
+[08:16:24][C][uart.arduino_esp32:151]: UART Bus 1:
+[08:16:24][C][uart.arduino_esp32:152]:   TX Pin: GPIO17
+[08:16:24][C][uart.arduino_esp32:153]:   RX Pin: GPIO16
+[08:16:24][C][uart.arduino_esp32:155]:   RX Buffer Size: 256
+[08:16:24][C][uart.arduino_esp32:157]:   Baud Rate: 500 baud
+[08:16:24][C][uart.arduino_esp32:158]:   Data Bits: 8
+[08:16:24][C][uart.arduino_esp32:159]:   Parity: NONE
+[08:16:24][C][uart.arduino_esp32:160]:   Stop bits: 1
+[08:16:24][C][uptime.sensor:033]: Uptime Sensor 'Uptime'
+[08:16:24][C][uptime.sensor:033]:   Device Class: 'duration'
+[08:16:24][C][uptime.sensor:033]:   State Class: 'total_increasing'
+[08:16:24][C][uptime.sensor:033]:   Unit of Measurement: 's'
+[08:16:24][C][uptime.sensor:033]:   Accuracy Decimals: 0
+[08:16:24][C][uptime.sensor:033]:   Icon: 'mdi:timer-outline'
+[08:16:24][V][uptime.sensor:033]:   Unique ID: 'a4f00f6919e8-uptime'
+[08:16:24][C][uptime.sensor:034]:   Type: Seconds
+[08:16:24][C][template.sensor:022]: Template Sensor 'Free Heap Memory'
+[08:16:24][C][template.sensor:022]:   Accuracy Decimals: 1
+[08:16:24][C][light:092]: Light 'Status LED'
+[08:16:24][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:24][D][climate:399]:   Mode: AUTO
+[08:16:24][D][climate:401]:   Action: IDLE
+[08:16:24][D][climate:404]:   Fan Mode: AUTO
+[08:16:24][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:24][D][binary_sensor:036]: 'Bus Alive': Sending state OFF
+[08:16:24][V][text_sensor:013]: 'Bus Status': Received new state No Signal
+[08:16:24][D][text_sensor:064]: 'Bus Status': Sending state 'No Signal'
+[08:16:24][V][text_sensor:013]: 'Corrected Mode': Received new state No Data
+[08:16:24][D][text_sensor:064]: 'Corrected Mode': Sending state 'No Data'
+[08:16:24][V][text_sensor:013]: 'Corrected Fan Raw': Received new state No Data
+[08:16:24][D][text_sensor:064]: 'Corrected Fan Raw': Sending state 'No Data'
+[08:16:24][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (70 ms).
+[08:16:24][W][component:240]: Components should block for at most 30 ms.
+[08:16:24][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:24][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:24][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:24][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:24][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:24][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:24][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:24][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:24][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (80 ms).
+[08:16:24][W][component:240]: Components should block for at most 30 ms.
+[08:16:24][C][wifi_info:014]: WifiInfo Mac Address 'MAC Address'
+[08:16:24][V][wifi_info:014]:   Unique ID: 'a4f00f6919e8-wifiinfo-macadr'
+[08:16:24][C][version.text_sensor:021]: Version Text Sensor 'ESPHome Version'
+[08:16:24][C][version.text_sensor:021]:   Icon: 'mdi:new-box'
+[08:16:24][V][version.text_sensor:021]:   Unique ID: 'a4f00f6919e8-version'
+[08:16:24][C][status:034]: Status Binary Sensor 'Status'
+[08:16:24][C][status:034]:   Device Class: 'connectivity'
+[08:16:24][C][restart:068]: Restart Switch 'Restart'
+[08:16:24][C][restart:070]:   Icon: 'mdi:restart'
+[08:16:24][C][restart:091]:   Restore Mode: always OFF
+[08:16:24][C][safe_mode.button:024]: Safe Mode Button 'Safe Mode Boot'
+[08:16:24][C][safe_mode.button:024]:   Icon: 'mdi:restart-alert'
+[08:16:24][C][homeassistant.time:010]: Home Assistant Time:
+[08:16:24][C][captive_portal:089]: Captive Portal:
+[08:16:24][C][web_server:285]: Web Server:
+[08:16:24][C][web_server:286]:   Address: aircon.local:80
+[08:16:24][C][mdns:116]: mDNS:
+[08:16:24][C][mdns:117]:   Hostname: aircon
+[08:16:24][V][mdns:118]:   Services:
+[08:16:24][V][mdns:120]:   - _esphomelib, _tcp, 6053
+[08:16:24][V][mdns:122]:     TXT: friendly_name = Aircon
+[08:16:24][V][mdns:122]:     TXT: network = wifi
+[08:16:24][V][mdns:120]:   - _http, _tcp, 80
+[08:16:24][C][esphome.ota:075]:   Version: 2
+[08:16:24][C][safe_mode:018]: Safe Mode:
+[08:16:24][C][safe_mode:021]:   Invoke after 10 boot attempts
+[08:16:24][C][safe_mode:023]:   Remain in safe mode for 600 seconds
+[08:16:24][C][api:140]: API Server:
+[08:16:24][C][api:141]:   Address: aircon.local:6053
+[08:16:24][C][api:145]:   Using noise encryption: NO
+[08:16:24][C][fujitsu.climate:132]: Fujitsu Heat Pump Climate:
+[08:16:24][C][fujitsu.climate:133]:   Hardware present: YES
+[08:16:24][C][fujitsu.climate:134]:   Controller: Secondary
+[08:16:24][C][fujitsu.climate:135]:   LIN Interface: TJA1021
+[08:16:24][C][wifi_signal.sensor:010]: WiFi Signal 'WiFi Signal'
+[08:16:24][C][wifi_signal.sensor:010]:   Unit of Measurement: 'dBm'
+[08:16:24][V][wifi_signal.sensor:010]:   Unique ID: 'a4f00f6919e8-wifisignal'
+[08:16:26][C][wifi_info:010]: WifiInfo IPAddress 'IP Address'
+[08:16:26][V][wifi_info:010]:   Unique ID: 'a4f00f6919e8-wifiinfo-ip'
+[08:16:26][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:26][D][climate:399]:   Mode: AUTO
+[08:16:26][D][climate:401]:   Action: IDLE
+[08:16:26][D][climate:404]:   Fan Mode: AUTO
+[08:16:26][D][climate:419]:   Current Temperature: nan°C
+[08:16:26][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:26][D][binary_sensor:036]: 'Bus Alive': Sending state ON
+[08:16:26][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:26][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:26][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:26][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:26][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:26][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:26][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (81 ms).
+[08:16:26][W][component:240]: Components should block for at most 30 ms.
+[08:16:26][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:26][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:26][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:26][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:26][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:26][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:26][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:26][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:26][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:26][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (58 ms).
+[08:16:26][W][component:240]: Components should block for at most 30 ms.
+[08:16:26][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:26][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:26][D][climate:399]:   Mode: AUTO
+[08:16:26][D][climate:401]:   Action: IDLE
+[08:16:26][D][climate:404]:   Fan Mode: AUTO
+[08:16:26][D][climate:419]:   Current Temperature: nan°C
+[08:16:26][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:26][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:26][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:26][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:26][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:26][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:26][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:26][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (70 ms).
+[08:16:26][W][component:240]: Components should block for at most 30 ms.
+[08:16:27][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:27][D][climate:399]:   Mode: AUTO
+[08:16:27][D][climate:401]:   Action: IDLE
+[08:16:27][D][climate:404]:   Fan Mode: AUTO
+[08:16:27][D][climate:419]:   Current Temperature: nan°C
+[08:16:27][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:27][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:27][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:27][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:27][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:27][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:27][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:27][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (85 ms).
+[08:16:27][W][component:240]: Components should block for at most 30 ms.
+[08:16:27][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:28][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:28][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:28][D][climate:399]:   Mode: AUTO
+[08:16:28][D][climate:401]:   Action: IDLE
+[08:16:28][D][climate:404]:   Fan Mode: AUTO
+[08:16:28][D][climate:419]:   Current Temperature: nan°C
+[08:16:28][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:28][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:28][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:28][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:28][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:28][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:28][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:28][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (72 ms).
+[08:16:28][W][component:240]: Components should block for at most 30 ms.
+[08:16:29][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:29][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:29][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:29][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:29][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:29][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:29][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:29][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:29][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (70 ms).
+[08:16:29][W][component:240]: Components should block for at most 30 ms.
+[08:16:29][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:29][D][climate:399]:   Mode: AUTO
+[08:16:29][D][climate:401]:   Action: IDLE
+[08:16:29][D][climate:404]:   Fan Mode: AUTO
+[08:16:29][D][climate:419]:   Current Temperature: nan°C
+[08:16:29][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:29][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:29][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:29][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:29][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:29][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:29][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:29][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (67 ms).
+[08:16:29][W][component:240]: Components should block for at most 30 ms.
+[08:16:29][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:30][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:30][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:30][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:30][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:30][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:30][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:30][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:30][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:30][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:30][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (64 ms).
+[08:16:30][W][component:240]: Components should block for at most 30 ms.
+[08:16:30][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:30][D][climate:399]:   Mode: AUTO
+[08:16:30][D][climate:401]:   Action: IDLE
+[08:16:30][D][climate:404]:   Fan Mode: AUTO
+[08:16:30][D][climate:419]:   Current Temperature: nan°C
+[08:16:30][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:30][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:30][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:30][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:30][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:30][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:30][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:30][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (68 ms).
+[08:16:30][W][component:240]: Components should block for at most 30 ms.
+[08:16:32][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:32][D][climate:399]:   Mode: AUTO
+[08:16:32][D][climate:401]:   Action: IDLE
+[08:16:32][D][climate:404]:   Fan Mode: AUTO
+[08:16:32][D][climate:419]:   Current Temperature: nan°C
+[08:16:32][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:32][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:32][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:32][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:32][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:32][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:32][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:32][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (73 ms).
+[08:16:32][W][component:240]: Components should block for at most 30 ms.
+[08:16:32][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:32][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:32][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:32][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:32][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:32][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:32][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:32][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:32][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:32][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:32][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (70 ms).
+[08:16:32][W][component:240]: Components should block for at most 30 ms.
+[08:16:32][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:32][D][climate:399]:   Mode: AUTO
+[08:16:32][D][climate:401]:   Action: IDLE
+[08:16:32][D][climate:404]:   Fan Mode: AUTO
+[08:16:32][D][climate:419]:   Current Temperature: nan°C
+[08:16:32][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:32][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:32][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:32][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:32][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:32][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:32][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:32][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (72 ms).
+[08:16:32][W][component:240]: Components should block for at most 30 ms.
+[08:16:35][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:35][D][climate:399]:   Mode: AUTO
+[08:16:35][D][climate:401]:   Action: IDLE
+[08:16:35][D][climate:404]:   Fan Mode: AUTO
+[08:16:35][D][climate:419]:   Current Temperature: nan°C
+[08:16:35][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:35][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:35][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:35][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:35][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:35][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:35][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:35][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (69 ms).
+[08:16:35][W][component:240]: Components should block for at most 30 ms.
+[08:16:35][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:35][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:35][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:35][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:35][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:35][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:35][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:35][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:35][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (59 ms).
+[08:16:35][W][component:240]: Components should block for at most 30 ms.
+[08:16:35][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:35][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:35][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:35][D][climate:399]:   Mode: AUTO
+[08:16:35][D][climate:401]:   Action: IDLE
+[08:16:35][D][climate:404]:   Fan Mode: AUTO
+[08:16:35][D][climate:419]:   Current Temperature: nan°C
+[08:16:35][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:35][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:35][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:35][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:35][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:35][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:35][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:35][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (70 ms).
+[08:16:35][W][component:240]: Components should block for at most 30 ms.
+[08:16:35][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:35][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:35][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:35][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:35][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:35][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:35][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:35][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:35][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (62 ms).
+[08:16:35][W][component:240]: Components should block for at most 30 ms.
+[08:16:36][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:36][D][climate:399]:   Mode: AUTO
+[08:16:36][D][climate:401]:   Action: IDLE
+[08:16:36][D][climate:404]:   Fan Mode: AUTO
+[08:16:36][D][climate:419]:   Current Temperature: nan°C
+[08:16:36][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:36][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:36][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:36][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:36][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:36][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:36][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:36][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (70 ms).
+[08:16:36][W][component:240]: Components should block for at most 30 ms.
+[08:16:36][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:36][V][sensor:043]: 'Uptime': Received new state 979.895020
+[08:16:36][D][sensor:094]: 'Uptime': Sending state 979.89502 s with 0 decimals of accuracy
+[08:16:36][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:36][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:36][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:36][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:36][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:36][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:36][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:36][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:36][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (64 ms).
+[08:16:36][W][component:240]: Components should block for at most 30 ms.
+[08:16:36][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:36][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:36][D][climate:399]:   Mode: AUTO
+[08:16:36][D][climate:401]:   Action: IDLE
+[08:16:36][D][climate:404]:   Fan Mode: AUTO
+[08:16:36][D][climate:419]:   Current Temperature: nan°C
+[08:16:36][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:36][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:36][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:36][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:36][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:36][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:36][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:36][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (71 ms).
+[08:16:36][W][component:240]: Components should block for at most 30 ms.
+[08:16:39][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:39][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:39][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:39][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:39][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:39][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:39][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:39][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:39][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (63 ms).
+[08:16:39][W][component:240]: Components should block for at most 30 ms.
+[08:16:39][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:39][D][climate:399]:   Mode: AUTO
+[08:16:39][D][climate:401]:   Action: IDLE
+[08:16:39][D][climate:404]:   Fan Mode: AUTO
+[08:16:39][D][climate:419]:   Current Temperature: nan°C
+[08:16:39][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:39][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:39][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:39][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:39][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:39][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:39][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:39][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (68 ms).
+[08:16:39][W][component:240]: Components should block for at most 30 ms.
+[08:16:39][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:39][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:39][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:39][D][climate:399]:   Mode: AUTO
+[08:16:39][D][climate:401]:   Action: IDLE
+[08:16:39][D][climate:404]:   Fan Mode: AUTO
+[08:16:39][D][climate:419]:   Current Temperature: nan°C
+[08:16:39][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:39][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:39][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:39][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:39][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:39][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:39][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:39][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (63 ms).
+[08:16:39][W][component:240]: Components should block for at most 30 ms.
+[08:16:39][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:39][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:39][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:39][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:39][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:39][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:39][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:39][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:39][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (63 ms).
+[08:16:39][W][component:240]: Components should block for at most 30 ms.
+[08:16:39][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:39][D][climate:399]:   Mode: AUTO
+[08:16:39][D][climate:401]:   Action: IDLE
+[08:16:39][D][climate:404]:   Fan Mode: AUTO
+[08:16:39][D][climate:419]:   Current Temperature: nan°C
+[08:16:39][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:39][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:39][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:39][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:39][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:39][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:39][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:39][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (68 ms).
+[08:16:39][W][component:240]: Components should block for at most 30 ms.
+[08:16:40][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:40][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:40][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:40][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:40][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:40][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:40][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:40][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:40][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:40][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (59 ms).
+[08:16:40][W][component:240]: Components should block for at most 30 ms.
+[08:16:40][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:40][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:40][D][climate:399]:   Mode: AUTO
+[08:16:40][D][climate:401]:   Action: IDLE
+[08:16:40][D][climate:404]:   Fan Mode: AUTO
+[08:16:40][D][climate:419]:   Current Temperature: nan°C
+[08:16:40][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:40][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:40][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:40][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:40][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:40][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:40][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:40][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (73 ms).
+[08:16:40][W][component:240]: Components should block for at most 30 ms.
+[08:16:43][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:43][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:43][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:43][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:43][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:43][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:43][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:43][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:43][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (65 ms).
+[08:16:43][W][component:240]: Components should block for at most 30 ms.
+[08:16:43][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:43][D][climate:399]:   Mode: AUTO
+[08:16:43][D][climate:401]:   Action: IDLE
+[08:16:43][D][climate:404]:   Fan Mode: AUTO
+[08:16:43][D][climate:419]:   Current Temperature: nan°C
+[08:16:43][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:43][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:43][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:43][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:43][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:43][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:43][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:43][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (72 ms).
+[08:16:43][W][component:240]: Components should block for at most 30 ms.
+[08:16:43][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:43][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:43][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:43][D][climate:399]:   Mode: AUTO
+[08:16:43][D][climate:401]:   Action: IDLE
+[08:16:43][D][climate:404]:   Fan Mode: AUTO
+[08:16:43][D][climate:419]:   Current Temperature: nan°C
+[08:16:43][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:43][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:43][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:43][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:43][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:43][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:43][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:43][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (73 ms).
+[08:16:43][W][component:240]: Components should block for at most 30 ms.
+[08:16:43][D][fujitsu.heatpump:086]: UNIT  frame: FE DF DF 7F FF F5 E9 6B
+[08:16:43][D][fujitsu.heatpump:128]: RAW [0xDF->0xDF]: FE DF DF 7F FF F5 E9 6B
+[08:16:43][D][fujitsu.heatpump:153]:   B3=0x7F B4=0xFF (fixed overhead)
+[08:16:43][D][fujitsu.heatpump:157]:   B5=0xF5  temp_raw=10 (->26°C) mode_nibble=0
+[08:16:43][D][fujitsu.heatpump:158]:   B6=0xE9  (mapping TBD)
+[08:16:43][I][fujitsu.heatpump:183]: State: pwr=ON mode=0 temp=26°C room=nan°C fan=0
+[08:16:43][D][fujitsu.climate:253]: State updated - Mode: 6, Target: 26.0°C, Current: nan°C
+[08:16:43][D][fujitsu.heatpump:290]: CORR (experimental): pwr=OFF mode=5 fan=0 err=0 econ=0 setpoint_raw=22(0=none) room=18C ctrl_present=1  raw=[20 80 00 0A 16 94 25 00]
+[08:16:43][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (63 ms).
+[08:16:43][W][component:240]: Components should block for at most 30 ms.
+[08:16:44][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:44][D][climate:399]:   Mode: AUTO
+[08:16:44][D][climate:401]:   Action: IDLE
+[08:16:44][D][climate:404]:   Fan Mode: AUTO
+[08:16:44][D][climate:419]:   Current Temperature: nan°C
+[08:16:44][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:44][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:44][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:44][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:44][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:44][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:44][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:44][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (73 ms).
+[08:16:44][W][component:240]: Components should block for at most 30 ms.
+[08:16:44][D][status_led:050]: 'Status LED': Setting state ON
+[08:16:44][D][status_led:050]: 'Status LED': Setting state OFF
+[08:16:44][D][climate:396]: 'Fujitsu Heat Pump' - Sending state:
+[08:16:44][D][climate:399]:   Mode: AUTO
+[08:16:44][D][climate:401]:   Action: IDLE
+[08:16:44][D][climate:404]:   Fan Mode: AUTO
+[08:16:44][D][climate:419]:   Current Temperature: nan°C
+[08:16:45][D][climate:425]:   Target Temperature: 26.00°C
+[08:16:45][V][text_sensor:013]: 'Bus Status': Received new state Bus OK
+[08:16:45][D][text_sensor:064]: 'Bus Status': Sending state 'Bus OK'
+[08:16:45][V][text_sensor:013]: 'Corrected Mode': Received new state Auto (raw=5)
+[08:16:45][D][text_sensor:064]: 'Corrected Mode': Sending state 'Auto (raw=5)'
+[08:16:45][V][text_sensor:013]: 'Corrected Fan Raw': Received new state 0
+[08:16:45][D][text_sensor:064]: 'Corrected Fan Raw': Sending state '0'
+[08:16:45][W][component:239]: Component fujitsu_climate.climate took a long time for an operation (68 ms).
+[08:16:45][W][component:240]: Components should block for at most 30 ms.

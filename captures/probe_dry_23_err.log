@@ -1,0 +1,9 @@
+INFO ESPHome 2025.4.2
+INFO Reading configuration retrofujitsu.yaml...
+WARNING GPIO2 is a strapping PIN and should only be used for I/O with care.
+Attaching external pullup/down resistors to strapping pins can cause unexpected failures.
+See https://esphome.io/guides/faq.html#why-am-i-getting-a-warning-about-strapping-pins
+INFO Detected timezone 'Pacific/Auckland'
+INFO Starting log output from 192.168.1.39 using esphome API
+INFO Successfully connected to aircon @ 192.168.1.39 in 0.609s
+INFO Successful handshake with aircon @ 192.168.1.39 in 0.100s

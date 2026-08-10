@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.15"
+    version: "3B.16"
   on_boot:
     priority: 600
     then:
@@ -211,6 +211,15 @@ text_sensor:
     corrected_fan_raw:
       name: "Corrected Fan Raw"
       id: corrected_fan_raw
+    corrected_setpoint:
+      name: "Corrected Setpoint"
+      id: corrected_setpoint
+    corrected_room_temp:
+      name: "Corrected Room Temp"
+      id: corrected_room_temp
+    corrected_economy:
+      name: "Corrected Economy"
+      id: corrected_economy
 
 # Binary sensors
 binary_sensor:

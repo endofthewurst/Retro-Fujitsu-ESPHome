@@ -106,6 +106,9 @@ class FujiHeatPump {
   uint8_t getCorrModeRaw() const { return corr_mode_raw_; }
   uint8_t getCorrFanRaw() const { return corr_fan_raw_; }
   uint32_t getCorrLastUpdateTime() const { return corr_last_update_ms_; }
+  uint8_t getCorrSetpointRaw() const { return corr_setpoint_raw_; }
+  uint8_t getCorrRoomTempRaw() const { return corr_room_temp_raw_; }
+  bool getCorrEconomy() const { return corr_economy_; }
   
  protected:
   uart::UARTComponent *uart_{nullptr};
@@ -169,6 +172,9 @@ class FujiHeatPump {
   uint8_t corr_mode_raw_{0xFF};    // last decoded corrected-mode value; 0xFF = none yet
   uint8_t corr_fan_raw_{0xFF};     // last decoded corrected-fan value; 0xFF = none yet
   uint32_t corr_last_update_ms_{0};  // millis() of the last corrected-frame decode
+  uint8_t corr_setpoint_raw_{0};   // last decoded corrected setpoint, degC (0 = none, e.g. FAN mode)
+  uint8_t corr_room_temp_raw_{0};  // last decoded corrected room/controller temp, degC
+  bool corr_economy_{false};       // last decoded corrected economy-mode flag
   void feedCorrectedSync(uint8_t raw_byte);
   void processCorrectedFrame(const uint8_t *frame);
 };
