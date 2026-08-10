@@ -26,6 +26,11 @@ bool FujiHeatPump::readFrame() {
     // Always log every raw byte at VERBOSE level for protocol capture/debug
     ESP_LOGV(TAG, "RX byte: 0x%02X", byte);
 
+    // Experimental corrected-decode tracker (see FujiHeatPump.h) — runs on every raw
+    // byte independently of the sync/parse logic below. Logs only; does not affect
+    // on_off_/mode_/temperature_/fan_mode_.
+    feedCorrectedSync(byte);
+
     if (rx_index_ == 0) {
       // Sync strategy: only 0xFE locks us onto a unit frame. The ctrl frame
       // immediately follows a valid unit frame, so we accept any start byte
@@ -95,7 +100,7 @@ void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
   }
 
   // --- Always dump the raw frame at DEBUG level for capture/analysis ---
-  // Format: RAW [src→dst]: FE 21 10 09 06 00 33 EB
+  // Format: RAW [src->dst]: FE 21 10 09 06 00 33 EB
   {
     char hex_buf[3 * FRAME_LENGTH + 1];
     for (size_t i = 0; i < FRAME_LENGTH; i++) {
@@ -115,10 +120,15 @@ void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len) {
   // [6] state byte B: purpose still being mapped (bit[1] = update-in-progress flag suspected)
   // [7] 0x6B  end marker (0xEB on some alternate frames)
   //
-  // Temperature: ((frame[5] >> 1) & 0x0F) + 16  e.g. 0xC9 → 4 + 16 = 20°C ✓
-  // Mode:        (~(frame[5] >> 4)) & 0x0F        e.g. 0xC9 → ~0xC & 0xF = 3 = COOL ✓
+  // Temperature: ((frame[5] >> 1) & 0x0F) + 16  e.g. 0xC9 -> 4 + 16 = 20°C (confirmed)
+  // Mode:        (~(frame[5] >> 4)) & 0x0F        e.g. 0xC9 -> ~0xC & 0xF = 3 = COOL (confirmed)
   //
   // Power and fan are in the CTRL frame start byte — see parseCTRLFrame().
+  //
+  // NOTE (10 Aug 2026): this is the original decode, kept as the primary/working path.
+  // An experimental alternative decode (byte inversion + 2-byte sync shift, see
+  // upstream-comparison.md) runs in parallel via feedCorrectedSync()/processCorrectedFrame()
+  // below, logged under tag "CORR" — it is not wired to state here pending live validation.
 
   ESP_LOGD(TAG, "  B3=0x%02X B4=0x%02X (fixed overhead)",
            frame[3], frame[4]);
@@ -165,8 +175,11 @@ void FujiHeatPump::parseCTRLFrame(const uint8_t *frame, size_t len) {
   // [6] same as UNIT frame B6
   // [7] 0x4B  end marker
   //
-  // Power: (frame[0] >> 1) & 0x01   e.g. CC→0=OFF, CE→1=ON
-  // Fan:   (frame[0] >> 2) & 0x07   e.g. 0xCC/0xCE → 3 = MED ✓
+  // Power: (frame[0] >> 1) & 0x01   e.g. CC->0=OFF, CE->1=ON
+  // Fan:   (frame[0] >> 2) & 0x07   e.g. 0xCC/0xCE -> 3 = MED (this project's original
+  //        reading — the bits here never actually change across any capture, which is
+  //        exactly why fan speed is flagged as unresolved; see processCorrectedFrame()
+  //        for the experimental alternative that does find a moving fan field.)
 
   uint8_t ctrl0 = frame[0];
   on_off_ = ((ctrl0 >> 1) & 0x01) != 0;
@@ -177,6 +190,66 @@ void FujiHeatPump::parseCTRLFrame(const uint8_t *frame, size_t len) {
 
   ESP_LOGI(TAG, "CTRL decoded: pwr=%s fan=%d (CTRL0=0x%02X)",
            on_off_ ? "ON" : "OFF", static_cast<int>(fan_mode_), ctrl0);
+}
+
+// --- Experimental corrected decode (added 10 Aug 2026, Session A) ---
+// See FujiHeatPump.h for the full explanation. Summary: invert every raw byte, and read
+// the meaningful 8-byte window starting 2 bytes after the raw (uninverted) 0xFE sync byte
+// rather than at it. Verified by hand against every worked example in
+// upstream-comparison.md (all five modes, all logged setpoints, all logged room
+// temperatures) before writing this — but that verification was against a re-read of old
+// log files, not live hardware. Treat log lines tagged "CORR" as a hypothesis to check
+// against real button presses, not as ground truth yet.
+
+void FujiHeatPump::feedCorrectedSync(uint8_t raw_byte) {
+  switch (corr_state_) {
+    case CorrSyncState::SEEK_FE:
+      if (raw_byte == FRAME_START) {  // raw (uninverted) 0xFE
+        corr_state_ = CorrSyncState::SKIP_ONE;
+      }
+      break;
+    case CorrSyncState::SKIP_ONE:
+      // Discard the byte immediately after the raw 0xFE — the corrected window starts
+      // 2 bytes after the sync byte, not right at it.
+      corr_state_ = CorrSyncState::CAPTURE;
+      corr_index_ = 0;
+      break;
+    case CorrSyncState::CAPTURE:
+      corr_buf_[corr_index_++] = raw_byte ^ 0xFF;  // invert every byte on the way in
+      if (corr_index_ >= 8) {
+        processCorrectedFrame(corr_buf_);
+        corr_state_ = CorrSyncState::SEEK_FE;
+      }
+      break;
+  }
+}
+
+void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
+  // Field layout (validated by hand against upstream-comparison.md's worked examples —
+  // NOT yet against live hardware):
+  //   frame[3]  bit0=power  bits[3:1]=mode(1=Fan,2=Dry,3=Cool,4=Heat,5=Auto)
+  //             bits[6:4]=fan (raw value; enum order — unreality vs fuji-iot — unconfirmed)
+  //             bit7=error flag
+  //   frame[4]  bits[6:0]=setpoint in °C directly, no offset (0 = no setpoint, e.g. FAN
+  //             mode)  bit7=economy mode
+  //   frame[6]  bit0=controller-present flag  (frame[6] >> 1)=room/controller temp in °C
+  // frame[0], frame[1], frame[2], frame[5], frame[7] were constant in every example seen
+  // so far (0x20, 0x80, 0x00, 0x94, 0x00) — logged raw below in case that changes.
+  bool corr_power = frame[3] & 0x01;
+  uint8_t corr_mode = (frame[3] >> 1) & 0x07;
+  uint8_t corr_fan = (frame[3] >> 4) & 0x07;
+  bool corr_error = (frame[3] >> 7) & 0x01;
+  bool corr_economy = (frame[4] >> 7) & 0x01;
+  uint8_t corr_setpoint = frame[4] & 0x7F;
+  bool corr_ctrl_present = frame[6] & 0x01;
+  uint8_t corr_room_temp = frame[6] >> 1;
+
+  ESP_LOGD(TAG,
+           "CORR (experimental): pwr=%s mode=%d fan=%d err=%d econ=%d setpoint_raw=%d(0=none) "
+           "room=%dC ctrl_present=%d  raw=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+           corr_power ? "ON" : "OFF", corr_mode, corr_fan, corr_error, corr_economy,
+           corr_setpoint, corr_room_temp, corr_ctrl_present,
+           frame[0], frame[1], frame[2], frame[3], frame[4], frame[5], frame[6], frame[7]);
 }
 
 void FujiHeatPump::buildFrame() {
