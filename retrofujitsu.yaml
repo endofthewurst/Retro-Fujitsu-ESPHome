@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.12"
+    version: "3B.13"
   on_boot:
     priority: 600
     then:
@@ -200,11 +200,25 @@ text_sensor:
   - platform: version
     name: "ESPHome Version"
 
+  - platform: fujitsu_climate
+    fujitsu_climate_id: fujitsu_hp
+    name: "Bus Status"
+    id: bus_status
+    icon: "mdi:pulse"
+    entity_category: diagnostic
+
 # Binary sensors
 binary_sensor:
   - platform: status
     name: "Status"
     id: system_status
+
+  - platform: fujitsu_climate
+    fujitsu_climate_id: fujitsu_hp
+    name: "Bus Alive"
+    id: bus_alive
+    device_class: connectivity
+    entity_category: diagnostic
 
 # Switches
 switch:

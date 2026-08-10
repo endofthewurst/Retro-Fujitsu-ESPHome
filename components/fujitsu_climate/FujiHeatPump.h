@@ -89,6 +89,14 @@ class FujiHeatPump {
   // Debug helpers
   void setDebug(bool debug) { debug_ = debug; }
   bool isConnected() const { return connected_; }
+
+  // Bus-activity timestamps for a higher-level alive/dead diagnostic (added 10 Aug
+  // 2026). last_frame_time_ only advances on a structurally valid frame (the proven
+  // sync/parse logic, not the experimental corrected-decode); last_any_byte_time_
+  // advances on every byte regardless of validity -- together they distinguish
+  // `no signal at all` vs `noise but no valid frames` vs `bus OK`.
+  uint32_t getLastFrameTime() const { return last_frame_time_; }
+  uint32_t getLastByteTime() const { return last_any_byte_time_; }
   
  protected:
   uart::UARTComponent *uart_{nullptr};
@@ -124,6 +132,7 @@ class FujiHeatPump {
   
   // Timing
   uint32_t last_frame_time_{0};
+  uint32_t last_any_byte_time_{0};  // set on every raw byte, regardless of validity (added 10 Aug 2026)
   static const uint32_t FRAME_REPLY_DELAY_MS = 60;  // Reply 50-60ms after receiving
 
   // --- Experimental corrected decode (added 10 Aug 2026, Session A) ---
