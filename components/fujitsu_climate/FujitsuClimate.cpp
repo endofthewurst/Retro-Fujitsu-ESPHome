@@ -205,8 +205,12 @@ void FujitsuClimate::update_climate_state() {
     }
   }
 
-  ESP_LOGD(TAG, "State updated - Mode: %d, Target: %.1fÂ°C, Current: %.1fÂ°C",
-           mode, target_temperature, current_temperature);
+  uint32_t now_ms = millis();
+  if (now_ms - state_log_last_ms_ >= 1000) {
+    state_log_last_ms_ = now_ms;
+    ESP_LOGD(TAG, "State updated - Mode: %d, Target: %.1fÂ°C, Current: %.1fÂ°C",
+             mode, target_temperature, current_temperature);
+  }
 }
 
 // Mode and fan mapping functions remain unchanged

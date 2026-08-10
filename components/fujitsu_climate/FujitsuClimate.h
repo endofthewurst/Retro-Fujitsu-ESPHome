@@ -44,6 +44,12 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   static constexpr uint32_t BUS_BYTE_TIMEOUT_MS = 2000;
 
   void update_bus_status_();
+
+  // Throttles the `State updated` log in update_climate_state() to 1/sec (added 10
+  // Aug 2026) -- under real live-bus traffic this fired on every valid frame (several
+  // times/sec), and its float formatting (%.1f x2) was a remaining contributor to
+  // component-loop overruns after the FujiHeatPump-side dumps were throttled.
+  uint32_t state_log_last_ms_{0};
   
   // Update Home Assistant with current state
   void update_climate_state();
