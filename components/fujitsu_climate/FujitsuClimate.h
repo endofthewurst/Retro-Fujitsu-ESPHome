@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "esphome/core/component.h"
 #include "esphome/components/climate/climate.h"
@@ -32,18 +32,27 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // in YAML via the fujitsu_climate binary_sensor/text_sensor platforms.
   void set_bus_alive_binary_sensor(binary_sensor::BinarySensor *s) { bus_alive_binary_sensor_ = s; }
   void set_bus_status_text_sensor(text_sensor::TextSensor *s) { bus_status_text_sensor_ = s; }
+  void set_corrected_mode_text_sensor(text_sensor::TextSensor *s) { corrected_mode_text_sensor_ = s; }
+  void set_corrected_fan_raw_text_sensor(text_sensor::TextSensor *s) { corrected_fan_raw_text_sensor_ = s; }
   
  protected:
   FujiHeatPump hp_;
   bool hardware_present_{false};
   binary_sensor::BinarySensor *bus_alive_binary_sensor_{nullptr};
   text_sensor::TextSensor *bus_status_text_sensor_{nullptr};
+  text_sensor::TextSensor *corrected_mode_text_sensor_{nullptr};
+  text_sensor::TextSensor *corrected_fan_raw_text_sensor_{nullptr};
 
   // Bus-alive/status thresholds (ms) -- see update_bus_status_() for the logic.
   static constexpr uint32_t BUS_FRAME_TIMEOUT_MS = 2000;
   static constexpr uint32_t BUS_BYTE_TIMEOUT_MS = 2000;
 
   void update_bus_status_();
+
+  // New-approach diagnostic (added 10 Aug 2026, Session B kickoff): mirrors the
+  // experimental corrected-decode's mode/fan fields to HA so they can be validated
+  // against real button presses -- see FujiHeatPump.h's corr_mode_raw_/corr_fan_raw_.
+  void update_corrected_diagnostics_();
 
   // Throttles the `State updated` log in update_climate_state() to 1/sec (added 10
   // Aug 2026) -- under real live-bus traffic this fired on every valid frame (several

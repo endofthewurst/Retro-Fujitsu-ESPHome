@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "esphome/core/component.h"
 #include "esphome/components/uart/uart.h"
@@ -24,9 +24,9 @@ static const uint8_t FRAME_END_CTRL = 0x4B;        // Controller frame end marke
 static const uint8_t FRAME_CTRL_START_NIBBLE = 0xD0; // Controller frame start: upper byte = 0xD, lower = varies
 static const uint8_t FRAME_LENGTH = 8;
 
-// Target temperature encoding: stored value = (Â°C - TEMP_OFFSET), range [0, TEMP_RAW_MAX]
+// Target temperature encoding: stored value = (°C - TEMP_OFFSET), range [0, TEMP_RAW_MAX]
 static const uint8_t TEMP_OFFSET = 16;
-static const uint8_t TEMP_RAW_MAX = 14;  // 14 + 16 = 30Â°C (upper visual limit)
+static const uint8_t TEMP_RAW_MAX = 14;  // 14 + 16 = 30°C (upper visual limit)
 
 // Sanity ceiling for room-temperature readings
 static const float ROOM_TEMP_MAX_C = 50.0f;
@@ -63,7 +63,7 @@ class FujiHeatPump {
   // Initialize connection
   void connect(uart::UARTComponent *uart, bool secondary);
   
-  // Frame reading (non-blocking â€” call from loop())
+  // Frame reading (non-blocking — call from loop())
   bool readFrame();
   
   // State setters (prepare frame for sending)
@@ -97,6 +97,15 @@ class FujiHeatPump {
   // `no signal at all` vs `noise but no valid frames` vs `bus OK`.
   uint32_t getLastFrameTime() const { return last_frame_time_; }
   uint32_t getLastByteTime() const { return last_any_byte_time_; }
+
+  // Live mirror of the experimental corrected decode (added 10 Aug 2026, Session B
+  // kickoff) -- exposed as new diagnostic HA entities (Corrected Mode / Corrected Fan
+  // Raw) so the corrected-decode hypothesis can be checked against real button presses
+  // without touching the proven mode_/fan_mode_ used by the live climate entity above.
+  // 0xFF means "no corrected frame decoded yet".
+  uint8_t getCorrModeRaw() const { return corr_mode_raw_; }
+  uint8_t getCorrFanRaw() const { return corr_fan_raw_; }
+  uint32_t getCorrLastUpdateTime() const { return corr_last_update_ms_; }
   
  protected:
   uart::UARTComponent *uart_{nullptr};
@@ -104,7 +113,7 @@ class FujiHeatPump {
   bool connected_{false};
   bool debug_{false};
   
-  // Current state (from bus) â€” NAN until first frame received
+  // Current state (from bus) — NAN until first frame received
   bool on_off_{false};
   FujiMode mode_{FujiMode::MODE_AUTO};
   float temperature_{NAN};
@@ -147,16 +156,19 @@ class FujiHeatPump {
   // window starts 2 bytes after the raw 0xFE sync byte, not at it. Applying that to the
   // existing capture logs correctly reproduced fan speed and room temperature, which
   // the decode above has never been able to read. This tracker runs independently of
-  // and in parallel with the parsing above â€” it only logs (ESP_LOGD, tag "CORR"), it
+  // and in parallel with the parsing above — it only logs (ESP_LOGD, tag "CORR"), it
   // does not feed on_off_/mode_/temperature_/fan_mode_ and is not wired to any HA
   // entity. Promote it to the primary decode only after it's been checked against
-  // live button presses (see test-and-dev-workflow.md Session B) â€” this has so far
+  // live button presses (see test-and-dev-workflow.md Session B) — this has so far
   // only been validated against a re-read of old logs, not fresh hardware.
   enum class CorrSyncState : uint8_t { SEEK_FE, SKIP_ONE, CAPTURE };
   CorrSyncState corr_state_{CorrSyncState::SEEK_FE};
   uint8_t corr_buf_[8];
   uint8_t corr_index_{0};
   uint32_t corr_last_log_ms_{0};  // throttle experimental logging (added 10 Aug 2026, post-crash-loop fix)
+  uint8_t corr_mode_raw_{0xFF};    // last decoded corrected-mode value; 0xFF = none yet
+  uint8_t corr_fan_raw_{0xFF};     // last decoded corrected-fan value; 0xFF = none yet
+  uint32_t corr_last_update_ms_{0};  // millis() of the last corrected-frame decode
   void feedCorrectedSync(uint8_t raw_byte);
   void processCorrectedFrame(const uint8_t *frame);
 };
