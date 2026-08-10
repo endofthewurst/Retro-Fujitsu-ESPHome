@@ -1,8 +1,28 @@
 # Retro-Fujitsu-ESPHome
 
-Control and monitor a **Fujitsu heat pump** from **Home Assistant** using an ESP32 and ESPHome without modifying or replacing the existing wired controller.
+Monitor, and eventually control, a **Fujitsu heat pump** from **Home Assistant** using an
+ESP32 and ESPHome — without modifying or replacing the existing wired controller.
 
-This project was developed and tested for a **~2010 era Fujitsu RSG series** heat pump using the LIN bus interface, connecting as a secondary (slave) controller alongside the existing wired remote.
+Developed and tested against a **~2010-era Fujitsu ART30LUAK (RSG series)** heat pump using
+its LIN bus interface, with the ESP32 joining as a **secondary (slave) controller** alongside
+the existing UTY-RNNUM wired remote.
+
+**Current status:** decoding the bus is working and solid (power, mode, and target
+temperature are read correctly into Home Assistant). Sending commands back to the unit is
+**experimental and unvalidated** — see [Protocol](#protocol) and
+[Project History & Phases](#project-history--phases) below before relying on it.
+
+---
+
+## Design principle: the ESP32 is never the boss
+
+The wired UTY-RNNUM is the **primary controller** and must always remain fully capable of
+running the system on its own — regardless of whether the ESP32 is powered, on WiFi, able
+to reach Home Assistant, or running firmware without bugs. A person must always be able to
+walk up to the wired controller and operate the heat pump exactly as if the ESP32 didn't
+exist. If the ESP32 and the wired controller ever disagree, the wired controller's setting
+is the one that should win. This governs every design decision in the transmit (control)
+path.
 
 ---
 
@@ -25,33 +45,42 @@ This project was developed and tested for a **~2010 era Fujitsu RSG series** hea
 
 ## Features
 
-### Home Assistant Integration
-- **Climate entity** - Full control via standard HA climate card
-- **Diagnostic sensors** - IP address, WiFi signal strength, uptime, free heap
-- **Status LED** - Visual feedback on ESP32 board (GPIO2)
-- **Web interface** - ESPHome built-in web server for local access
-- **OTA updates** - Reflash wirelessly from ESPHome on Windows
+### Confirmed and working
+- **State decode** — Power, Mode, and Target Temperature read correctly off the bus and
+  published to Home Assistant as a climate entity (see caveats below for HEAT/AUTO).
+- **Diagnostic sensors** — IP address, WiFi signal strength, uptime, free heap.
+- **Status LED** — Visual feedback on the ESP32 board (GPIO2).
+- **Web interface** — ESPHome's built-in web server for local access.
+- **Non-invasive installation** — connects as a secondary (slave) controller; the existing
+  UTY-RNNUM keeps working normally, with no modification to the heat pump or the controller.
 
-### Climate Controls
-| Control | Options |
-|---------|---------|
-| Power | On / Off |
-| Mode | Auto, Cool, Heat, Dry, Fan Only |
-| Target Temperature | 16°C - 30°C |
-| Fan Speed | Auto, Quiet, Low, Medium, High |
+### Experimental / in progress
+- **Control from Home Assistant** — the climate entity accepts commands (power, mode,
+  temperature, fan) and the firmware has scaffolding to build and transmit a frame in
+  response, but the frame-building logic is **unvalidated and explicitly marked as a guess
+  in the source**. Don't rely on it to actually change the heat pump's behaviour yet.
+- **Fan speed** — not currently decoded or published.
+- **Current (room) temperature** — not currently decoded or published.
+- **OTA updates** — works, with one caveat: native ESPHome OTA fails if `logger: level:
+  VERBOSE` is set (use the curl route below instead in that case).
+
+### Climate Controls (target state — see status above for what's actually reliable today)
+| Control | Options | Status |
+|---------|---------|--------|
+| Power | On / Off | Decoded reliably; control experimental |
+| Mode | Auto, Cool, Heat, Dry, Fan Only | Decoded reliably; control experimental |
+| Target Temperature | 16°C – 30°C | Decoded for COOL/DRY; HEAT/AUTO setpoint decode unresolved |
+| Fan Speed | Auto, Quiet, Low, Medium, High | Not yet decoded |
 
 ### Sensors
-| Sensor | Description |
-|--------|-------------|
-| Current Temperature | Room temperature from host Fujitsu wired controller sensor |
-| Target Temperature | Current setpoint |
-| WiFi Signal | RSSI in dBm |
-| IP Address | Device IP on local network |
-| Uptime | Time since last reboot |
-| Free Heap | ESP32 memory (for diagnostics) |
-
-### Important: Non-Invasive Installation
-This project connects as a **secondary (slave) controller** on the LIN bus. Your existing **UTY-RNNUM** wired controller continues to work normally. No modifications to the heat pump or existing controller are required.
+| Sensor | Description | Status |
+|--------|-------------|--------|
+| Target Temperature | Current setpoint | Working (COOL/DRY confirmed; HEAT/AUTO unresolved) |
+| Current Temperature | Room temperature | Not yet decoded — see Protocol |
+| WiFi Signal | RSSI in dBm | Working |
+| IP Address | Device IP on local network | Working |
+| Uptime | Time since last reboot | Working |
+| Free Heap | ESP32 memory (for diagnostics) | Working |
 
 ---
 
@@ -59,65 +88,51 @@ This project connects as a **secondary (slave) controller** on the LIN bus. Your
 
 ```
 Fujitsu Heat Pump (Indoor Unit)
-        ↕  LIN Bus (500 baud, 8N1)
+        <->  LIN Bus (500 baud, 8N1)
   linttl3 Module (TJA1021)
-        ↕  TTL UART (3.3V)
+        <->  TTL UART (3.3V)
     ESP32-WROOM-32
-        ↕  WiFi
+        <->  WiFi
     Home Assistant
 ```
 
-The Fujitsu indoor unit communicates with controllers using a **LIN bus** running at **500 baud, 8N1**. The linttl3 module converts the 12V LIN bus signals to 3.3V TTL levels suitable for the ESP32's UART.
+The Fujitsu indoor unit communicates with controllers using a **LIN bus** running at
+**500 baud, 8N1**. The linttl3 module converts the 12V/24V LIN bus signals to 3.3V TTL
+levels suitable for the ESP32's UART.
 
-The ESP32 listens to frames on the bus and can also inject control frames as a secondary controller, allowing Home Assistant to control the heat pump while the existing wired controller continues to operate normally.
+The ESP32 listens to frames on the bus and decodes them into Home Assistant. Injecting
+control frames as a secondary controller is implemented but experimental (see Features) —
+the existing wired controller continues to operate normally either way.
 
 ---
 
 ## Wiring
 
-### ⚠️ Safety Warning
-**Turn off the heat pump at the breaker before opening the indoor unit or making any connections.**
+### Safety Warning
+**Turn off the heat pump at the breaker before opening the indoor unit or making any
+connections.**
 
 ### Connection Overview
 
 ```
-┌─────────────────────────────────────────────────────┐
-│          Fujitsu Indoor Unit (ART30LUAK)            │
-│                                                     │
-│  Remote Controller Connector (CN-REM or similar)   │
-│  ┌─────┬──────────────────────────────────┐         │
-│  │ Pin │ Function                          │         │
-│  ├─────┼──────────────────────────────────┤         │
-│  │  1  │ 12V or 24V Power                 │─────┐   │
-│  │  2  │ LIN Bus (Data)                   │──┐  │   │
-│  │  3  │ Ground                           │─┐│  │   │
-│  └─────┴──────────────────────────────────┘ ││  │   │
-└─────────────────────────────────────────────╪╪══╪═══┘
-                                              ││  │
-                              ┌───────────────╪╪──╪──────────────┐
-                              │  linttl3 Module (TJA1021)        │
-                              │                                   │
-                              │  [VIN]  ←─────────────────────── │ 12/24V
-                              │  [LIN]  ←──────────────────────  │ LIN Data
-                              │  [GND]  ←────────────────────    │ Ground
-                              │                                   │
-                              │  [TX]   ──────────────────────►  │ GPIO16 (RX2)
-                              │  [RX]   ◄──────────────────────  │ GPIO17 (TX2)
-                              │  [GND]  ──────────────────────►  │ GND
-                              │                                   │
-                              │  [SLP]  (leave unconnected)      │
-                              │  [INH]  (leave unconnected)      │
-                              └───────────────────────────────────┘
-                                              │
-                              ┌───────────────┴──────────────────┐
-                              │         ESP32-WROOM-32           │
-                              │                                   │
-                              │  GPIO16 (RX2) ← linttl3 TX      │
-                              │  GPIO17 (TX2) → linttl3 RX      │
-                              │  GND          ← linttl3 GND     │
-                              │  GPIO2        → Status LED       │
-                              │  USB          → Laptop/Power     │
-                              └──────────────────────────────────┘
+Fujitsu Indoor Unit (ART30LUAK)
+  Remote Controller Connector (CN-REM or similar)
+    Pin 1: 12V or 24V Power  ---> linttl3 VIN
+    Pin 2: LIN Bus (Data)    ---> linttl3 LIN
+    Pin 3: Ground            ---> linttl3 GND (power side)
+
+linttl3 Module (TJA1021)
+    TX  ---> ESP32 GPIO16 (RX2)
+    RX  <--- ESP32 GPIO17 (TX2)
+    GND ---> ESP32 GND
+    SLP, INH: leave unconnected
+
+ESP32-WROOM-32
+    GPIO16 (RX2) <- linttl3 TX
+    GPIO17 (TX2) -> linttl3 RX
+    GND          <- linttl3 GND
+    GPIO2        -> Status LED
+    USB          -> Laptop/Power (bring-up only)
 ```
 
 ### Pin Summary
@@ -134,13 +149,16 @@ The ESP32 listens to frames on the bus and can also inject control frames as a s
 | INH | Not connected | Leave floating |
 
 ### Critical: Common Ground
-All three devices (heat pump, linttl3, ESP32) **must share a common ground**. Without this, communication will not work.
+All three devices (heat pump, linttl3, ESP32) **must share a common ground**. Without this,
+communication will not work.
+
+### Critical: pull-up on GPIO16 (RX)
+Without a pull-up, the floating pin will crash the ESP32 whenever it's powered but not yet
+wired to the bus — exactly the bench-test condition below.
 
 ---
 
 ## UART Configuration
-
-After extensive testing, the correct UART settings for the ART30LUAK are:
 
 | Parameter | Value |
 |-----------|-------|
@@ -150,52 +168,79 @@ After extensive testing, the correct UART settings for the ART30LUAK are:
 | Stop Bits | **1** |
 | Logic | Normal (not inverted) |
 
-> **Note:** Many older Fujitsu units use 500 baud 8N1. Some sources mention even/odd parity or different baud rates - these did not work for this unit. If you have a different model, you may need to experiment.
+> Some published Fujitsu LIN implementations use even parity (8E1) instead. 8N1 is what
+> this unit's receive path uses today; 8E1 is being evaluated for the transmit path (see
+> Protocol below) and hasn't shipped yet.
 
 ---
 
 ## Protocol
 
-> ⚠️ **Work in progress** — The byte mappings below are based on reference implementations from other Fujitsu models. Live capture from this specific unit (ART30LUAK / RSG series) is still in progress. Field meanings, bit positions, and address values are unconfirmed until validated against real bus traffic. Do not rely on this table for transmit commands yet.
+The bus runs a repeating **16-byte cycle**: one 8-byte **UNIT frame** (the indoor unit's
+status) immediately followed by one 8-byte **CTRL frame** (the wired controller's frame).
+This is confirmed structurally across 1112 captured frames with zero sync errors — it is
+**not** the single 8-byte frame model used by some other Fujitsu ESPHome projects; those
+target different frame markers for different unit families.
 
-The Fujitsu LIN bus protocol uses **8-byte frames**:
+### UNIT frame
 
-| Byte | Content | Notes |
-|------|---------|-------|
-| 0 | `0xFE` | Sync/Start marker |
-| 1 | Source address | Controller that sent the frame |
-| 2 | Destination address | Target controller |
-| 3 | Power, Mode, Fan, Error | Packed bits (see below) |
-| 4 | Temperature, Economy | Target temp in bits 0-6 |
-| 5 | Update magic, Swing | Control flags |
-| 6 | Controller temp | Room temp in bits 1-6 |
-| 7 | `0xEB` | End marker (constant) |
+| Byte | Content |
+|------|---------|
+| 0 | `0xFE` — start marker, fixed |
+| 1 | `0xDF` — fixed |
+| 2 | `0xDF` — fixed |
+| 3 | `0x7F` — fixed |
+| 4 | `0xFF` — fixed |
+| 5 | `B5` — state byte A: setpoint + mode nibble |
+| 6 | `B6` — state byte B: mode bits (upper bits not yet mapped) |
+| 7 | `0x6B` — end marker, fixed |
 
-### Byte 3 Bit Layout
-```
-Bit 7: Error flag
-Bits 4-6: Fan mode (0=Auto, 1=Quiet, 2=Low, 3=Medium, 4=High)
-Bits 1-3: Mode (1=Fan, 2=Dry, 3=Cool, 4=Heat, 5=Auto)
-Bit 0: Power (0=Off, 1=On)
-```
+### CTRL frame
 
-### Byte 4 Bit Layout
-```
-Bit 7: Economy mode
-Bits 0-6: Target temperature encoded as (°C - 16), valid range 0-14 → 16-30°C
-          Value 0x7F (all bits set) is a sentinel meaning "no setpoint"
-```
+| Byte | Content |
+|------|---------|
+| 0 | `C0` — fan/power/mode bit; the only byte with controller state |
+| 1 | `0xFF` — fixed |
+| 2 | `0xFF` — fixed |
+| 3 | `0x5F` at rest, `0x7E` briefly during a settings change |
+| 4 | `0xFF` — fixed |
+| 5 | `B5` — mirrors UNIT B5 |
+| 6 | `B6` — mirrors UNIT B6 |
+| 7 | `0x4B` — end marker, fixed |
 
-### Byte 6 Bit Layout
-```
-Bits 1-6: Controller/room temperature (°C, right shift by 1)
-Bit 0: Controller present flag
-```
+### Decoded fields (confirmed, ground-truthed against the physical controller)
 
-> Protocol reverse engineered with reference to:
-> - [Hackaday: Reverse Engineering a Fujitsu Air Conditioner (2017)](https://hackaday.io/project/19473-reverse-engineering-a-fujitsu-air-conditioner-unit)
-> - [unreality/FujiHeatPump](https://github.com/unreality/FujiHeatPump)
-> - [jaroslawprzybylowicz/fuji-iot](https://github.com/jaroslawprzybylowicz/fuji-iot)
+**Power** — CTRL byte 0 (`C0`), bit 1: `0xCE` = ON, `0xCC`/`0xCD` = OFF.
+
+**Mode** — a *pair* of fields, not one: `{B6 bits[2:0], C0 bit 0}`.
+
+| Mode | B6[2:0] | C0 bit 0 |
+|------|---------|----------|
+| COOL | 3 | 0 |
+| FAN  | 3 | 1 |
+| DRY  | 7 | 1 |
+| HEAT | 0 | 1 |
+| AUTO | 0 | 0 |
+
+**Target temperature** — `B5` bits [4:1]: `temp_c = ((B5 >> 1) & 0x0F) + 16`. Confirmed for
+COOL and DRY. **Unresolved for HEAT/AUTO** — both modes read the same `B5` value regardless
+of the setpoint, so either the offset differs in those modes or the field isn't live there.
+
+### Not yet decoded
+
+- **Fan speed.** Every byte thought to carry it is constant across all 1112 captured
+  frames — fan speed is not where earlier notes assumed it was. Needs a dedicated capture
+  with fan cycled through every position while everything else is held fixed.
+- **Current (room) temperature.** Never successfully read; the byte long assumed to carry
+  it turns out to carry mode information instead.
+
+A promising but **not yet validated** hypothesis, informed by comparing this project against
+other published Fujitsu LIN implementations: inverting every received byte (`^= 0xFF`) and
+reading the frame two bytes later than the naive sync point may reveal both fields, since it
+would put this unit's traffic in line with those other implementations' field layout. This
+has only been checked against old capture logs re-read offline, not against a live unit with
+a corrected parser — treat it as a lead, not an answer, until it's been through a hardware
+session.
 
 ---
 
@@ -204,7 +249,7 @@ Bit 0: Controller present flag
 ### Prerequisites
 - [ESPHome](https://esphome.io/) installed on Windows (via pip)
 - [Git](https://git-scm.com/download/win) installed
-- Home Assistant with ESPHome integration
+- Home Assistant with the ESPHome integration
 
 ### Installation
 
@@ -232,18 +277,31 @@ esphome config retrofujitsu.yaml
 ```
 
 #### 4. Flash to ESP32
-**First flash (USB):**
+
+**First flash, and any time firmware is being trusted for the first time:** do it with the
+board powered but **not yet wired to the LIN bus**. In that state OTA is just as safe as USB
+— a failed flash is a USB cable away from recovery, since the board isn't installed yet.
+Only wire it into the heat pump once you've confirmed the new firmware boots and reconnects
+cleanly.
+
+```batch
+esphome run retrofujitsu.yaml --device <esp32-ip-or-hostname>
+```
+
+If the board isn't reachable on the network yet (e.g. very first flash ever), fall back to
+USB:
 ```batch
 esphome run retrofujitsu.yaml
 ```
 
-**Subsequent updates (OTA):**
-```batch
-esphome run retrofujitsu.yaml --device 192.168.x.x
-```
+**Later updates**, once the board is installed and on the bus, are OTA-only — don't reflash
+over USB while it's wired into the wall unless you have to.
+
+> Native ESPHome OTA (port 3232) fails if `logger: level: VERBOSE` is set. If that's the
+> case, use `curl.exe -F "file=@firmware.bin" http://<esp32-ip>/update` instead.
 
 #### 5. Add to Home Assistant
-1. Go to **Settings** → **Devices & Services** → **ESPHome**
+1. Go to **Settings** -> **Devices & Services** -> **ESPHome**
 2. Device **"Aircon"** should appear automatically
 3. Click **Configure** and add it
 
@@ -265,36 +323,38 @@ The onboard LED (GPIO2) shows the current status:
 
 ## Home Assistant
 
-Once connected, the **Aircon** device appears in Home Assistant with:
+Once connected, the **Aircon** device appears in Home Assistant. Entity IDs are prefixed
+with the device name (`aircon`), e.g.:
 
-### Climate Card
 ```yaml
 type: thermostat
-entity: climate.fujitsu_heat_pump
+entity: climate.aircon_fujitsu_heat_pump
 ```
 
-
+---
 
 ## Troubleshooting
 
 ### No Frames Received
 - Check linttl3 is powered (LED on if equipped)
 - Verify common ground between all devices
-- Check TX/RX not swapped (linttl3 TX → ESP32 GPIO16)
+- Check TX/RX aren't swapped (linttl3 TX -> ESP32 GPIO16)
 - Confirm baud rate is 500 with parity NONE
 
-### Temperatures Wrong
-- Should read 16-30°C for target temp
-- Should read actual room temperature for current temp
-- If values are wildly wrong, byte parsing may need adjustment for your model
+### Room Temperature / Fan Speed Show Nothing
+Expected right now — neither field is decoded yet (see Protocol above). This isn't a wiring
+or config problem.
+
+### Target Temperature Wrong in HEAT or AUTO
+Known unresolved issue — see Protocol above. COOL and DRY are reliable.
 
 ### Device Not Appearing in Home Assistant
-- Check ESP32 is on WiFi (web interface accessible)
+- Check the ESP32 is on WiFi (web interface accessible)
 - Restart Home Assistant
-- Try adding manually with IP address
+- Try adding manually with the IP address
 
 ### ESP32 Crash Loop After Flashing
-- Flash Phase 1 baseline to recover
+- Check the GPIO16 pull-up is in place if bench-testing unwired
 - Check for compilation errors
 - Ensure `setup()` doesn't block waiting for UART
 
@@ -302,14 +362,12 @@ entity: climate.fujitsu_heat_pump
 
 ## Debug Logging
 
-### Enabling Verbose Frame Logs
-
-The Fujitsu component emits raw frame data and bit-field breakdowns at the `DEBUG` log level, gated behind the `debug` flag on the component.  To enable:
+Set `logger: level: DEBUG` (or `VERBOSE` for even more) in `retrofujitsu.yaml` and enable
+the component's own debug flag:
 
 ```yaml
-# retrofujitsu.yaml
 logger:
-  level: DEBUG   # or VERBOSE for even more detail
+  level: DEBUG
 
 fujitsu_climate:
   - id: aircon
@@ -317,38 +375,30 @@ fujitsu_climate:
     debug: true
 ```
 
-With `debug: true` every valid received frame produces three log lines:
-
-```
-[D][fujitsu.heatpump]: Raw frame: FE 21 10 09 06 00 33 EB
-[D][fujitsu.heatpump]:   Byte[3]=0x09  power=1 mode=4 fan=0 err=0
-[D][fujitsu.heatpump]:   Byte[4]=0x06  temp_raw=6 economy=0
-[D][fujitsu.heatpump]:   Byte[6]=0x33  ctrl_temp_raw=25 ctrl_present=1
-```
-
-### Interpreting Raw Frames
-
-| Field | Calculation | Example above |
-|-------|-------------|---------------|
-| Target temp | `(byte4 & 0x7F) + 16` °C | `6 + 16 = 22°C` |
-| Room temp | `(byte6 & 0x7E) >> 1` °C | `(0x33 & 0x7E) >> 1 = 25°C` |
-| Mode | `(byte3 >> 1) & 0x07` | `4 = Heat` |
-| Fan | `(byte3 >> 4) & 0x07` | `0 = Auto` |
-
-A `byte4` value of `0x7F` (all seven bits set) is a sentinel meaning the heat pump has not yet reported a valid setpoint; the component will keep the previous target temperature and log a warning.
+With debug logging on, each cycle logs the raw UNIT and CTRL frames as hex, plus a
+field-by-field breakdown (`B5=...`, `B6=...`) and the decoded state line. Sending a command
+additionally logs the frame the firmware built and the checksum calculation before
+transmitting it — useful for checking transmit attempts against what's actually observed on
+the bus, given transmit is still experimental.
 
 ---
 
 ## Project History & Phases
 
-This project was built incrementally:
+- **Feb 2026** — Baseline ESP32 + ESPHome, diagnostics, LED patterns, Fujitsu component
+  compiling in listen-only mode with no hardware connected.
+- **29 Apr 2026** — Hardware wired up for the first time. Six capture sessions against the
+  live unit while cycling the wired controller through modes and settings. The 16-byte
+  UNIT+CTRL structure, mode identification, and power bit were all cracked in a single
+  afternoon and published to Home Assistant.
+- **May-Aug 2026** — Dormant.
+- **Aug 2026** — Recovered and consolidated the local working tree; corrected the fan-speed
+  and room-temperature decode (both were previously misreported as confirmed); began
+  investigating the transmit path.
 
-1. **Phase 1** - Baseline ESP32 with ESPHome (no Fujitsu code)
-2. **Phase 2** - Added diagnostics, LED patterns, UART test tools
-3. **Phase 3A** - Integrated Fujitsu component (software only, no hardware)
-4. **Phase 3B** - Hardware connection and protocol decoding
-5. **Phase 4** *(upcoming)* - Full bidirectional control
-6. **Phase 5** *(upcoming)* - Polish and optimisation
+Fan speed, room temperature, and the HEAT/AUTO setpoint offset are the remaining protocol
+gaps; a validated, tested transmit path is the remaining feature gap. See the open issues
+on this repo for current status.
 
 ---
 
@@ -361,11 +411,17 @@ This project stands on the shoulders of:
 - **[FujiHeatPump/esphome-fujitsu](https://github.com/FujiHeatPump/esphome-fujitsu)** - Original ESPHome custom component
 - **[Hackaday: Frederic Germain & Myles Eftos (2017)](https://hackaday.io/project/19473-reverse-engineering-a-fujitsu-air-conditioner-unit)** - Original reverse engineering of the Fujitsu LIN bus protocol
 
+These target different unit families with different frame markers to the ART30LUAK, so
+their code is a reference for method rather than a drop-in byte layout — though their field
+layout (after correcting for this unit's byte inversion and frame sync offset) is the
+current lead on the still-undecoded fan and room-temperature fields, see Protocol above.
+
 ---
 
 ## Contributing
 
-If you have a similar Fujitsu unit and this works (or doesn't work) for you, please open an issue or pull request with:
+If you have a similar Fujitsu unit and this works (or doesn't work) for you, please open an
+issue or pull request with:
 - Your indoor/outdoor unit model numbers
 - Your wired controller model
 - What worked or what needed changing
@@ -382,4 +438,6 @@ Apache 2.0 - see [LICENSE](LICENSE)
 
 ## Disclaimer
 
-This project involves opening electrical equipment and making connections to control boards. Do this at your own risk. Always turn off power at the breaker before working on the unit. This project is not affiliated with or endorsed by Fujitsu.
+This project involves opening electrical equipment and making connections to control
+boards. Do this at your own risk. Always turn off power at the breaker before working on
+the unit. This project is not affiliated with or endorsed by Fujitsu.
