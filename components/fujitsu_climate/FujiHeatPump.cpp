@@ -276,6 +276,7 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
     corr_setpoint_raw_ = corr_setpoint;
     corr_room_temp_raw_ = corr_room_temp;
     corr_economy_ = corr_economy;
+    corr_thermo_sensor_bit_ = corr_ctrl_present;
     corr_last_update_ms_ = millis();
 
   // Rate-limited to 1/sec (added 10 Aug 2026, post-crash-loop fix): with the RX pin
