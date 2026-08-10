@@ -124,8 +124,12 @@ class FujiHeatPump {
   size_t rx_index_{0};
   
   // Parse received frames
-  void parseFrame(const uint8_t *frame, size_t len);      // UNIT frame (FE...6B)
-  void parseCTRLFrame(const uint8_t *frame, size_t len);  // CTRL frame (??...4B)
+  // log_details gates the expensive per-frame ESP_LOGD/LOGI dumps (see readFrame()) --
+  // added 10 Aug 2026 after real live-bus traffic showed these firing on every single
+  // frame (several times/sec) caused sustained 65-85ms component-loop overruns, once a
+  // 527ms spike. State decoding itself always runs regardless of log_details.
+  void parseFrame(const uint8_t *frame, size_t len, bool log_details);      // UNIT frame (FE...6B)
+  void parseCTRLFrame(const uint8_t *frame, size_t len, bool log_details);  // CTRL frame (??...4B)
 
   // Build transmit frame
   void buildFrame();
@@ -133,6 +137,7 @@ class FujiHeatPump {
   // Timing
   uint32_t last_frame_time_{0};
   uint32_t last_any_byte_time_{0};  // set on every raw byte, regardless of validity (added 10 Aug 2026)
+  uint32_t debug_log_last_ms_{0};  // throttles the per-frame debug/info dumps to 1/sec (added 10 Aug 2026)
   static const uint32_t FRAME_REPLY_DELAY_MS = 60;  // Reply 50-60ms after receiving
 
   // --- Experimental corrected decode (added 10 Aug 2026, Session A) ---
