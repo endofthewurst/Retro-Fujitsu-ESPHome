@@ -97,6 +97,9 @@ void FujitsuClimate::update_corrected_diagnostics_() {
   uint32_t last_corr = hp_.getCorrLastUpdateTime();
   bool have_corr = (last_corr != 0) && (millis() - last_corr < BUS_FRAME_TIMEOUT_MS);
 
+  // Mode/Fan (renamed from "Corrected Mode"/"Corrected Fan Raw" 11 Aug 2026) now
+  // publish just the friendly label -- no "(raw=N)" suffix, no bare numbers -- per
+  // James's feedback that the diagnostic entities should show real values, not codes.
   if (corrected_mode_text_sensor_ != nullptr) {
     if (!have_corr) {
       corrected_mode_text_sensor_->publish_state("No Data");
@@ -111,9 +114,7 @@ void FujitsuClimate::update_corrected_diagnostics_() {
         case 5: label = "Auto"; break;
         default: label = "Unknown"; break;
       }
-      char buf[24];
-      snprintf(buf, sizeof(buf), "%s (raw=%d)", label, m);
-      corrected_mode_text_sensor_->publish_state(buf);
+      corrected_mode_text_sensor_->publish_state(label);
     }
   }
 
@@ -121,13 +122,21 @@ void FujitsuClimate::update_corrected_diagnostics_() {
     if (!have_corr) {
       corrected_fan_raw_text_sensor_->publish_state("No Data");
     } else {
-      char buf[8];
-      snprintf(buf, sizeof(buf), "%d", hp_.getCorrFanRaw());
-      corrected_fan_raw_text_sensor_->publish_state(buf);
+      uint8_t f = hp_.getCorrFanRaw();
+      const char *label;
+      switch (f) {
+        case 0: label = "Auto"; break;
+        case 1: label = "Quiet"; break;
+        case 2: label = "Low"; break;
+        case 3: label = "Medium"; break;
+        case 4: label = "High"; break;
+        default: label = "Unknown"; break;
+      }
+      corrected_fan_raw_text_sensor_->publish_state(label);
     }
   }
 
-  // Setpoint / room temp are now numeric sensors (converted from text 11 Aug 2026,
+  // Setpoint / room temp are numeric sensors (converted from text 11 Aug 2026,
   // 3B.18) -- the underlying data is always whole degrees C (see the frame layout
   // comment in FujiHeatPump.cpp's processCorrectedFrame()), so there's no fractional
   // precision being discarded here. NAN publishes as "unknown" in HA, same meaning as
