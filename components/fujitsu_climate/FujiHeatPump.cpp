@@ -11,7 +11,7 @@ void FujiHeatPump::connect(uart::UARTComponent *uart, bool secondary) {
   uart_ = uart;
   secondary_ = secondary;
   connected_ = true;
-  
+
   ESP_LOGI(TAG, "Fujitsu Heat Pump initialized");
   ESP_LOGI(TAG, "Controller type: %s", secondary ? "Secondary" : "Primary");
   ESP_LOGI(TAG, "LIN interface: TJA1021 compatible");
@@ -40,8 +40,12 @@ bool FujiHeatPump::readFrame() {
     // -frame timestamp past the 2s Bus Alive timeout) is consistent with intermittent
     // sync loss with no other obvious cause. Paired with dropping `logger: level:` from
     // VERBOSE to DEBUG in retrofujitsu.yaml, which strips ESP_LOGV calls at compile
-    // time entirely. If flicker persists after this, next suspect is UART RX buffer
-    // size / BUS_FRAME_TIMEOUT_MS tuning, not logging.
+    // time entirely. 3B.19 update: this did NOT fully resolve the flicker on its own;
+    // BUS_FRAME_TIMEOUT_MS was widened to 4000ms as a mitigation -- see
+    // FujitsuClimate.h. An 11 Aug HA-history check found the widened timeout produced
+    // zero flicker events over the following ~1.5h (vs. ~1/53s before), so this looks
+    // like it's working in practice even though the underlying root cause of the
+    // short quiet gaps themselves is still unconfirmed.
 
     // Corrected decode (now primary -- see FujiHeatPump.h) runs on every raw byte
     // independently of the sync/parse logic below.
@@ -103,6 +107,14 @@ bool FujiHeatPump::readFrame() {
         } else if (valid_ctrl) {
           parseCTRLFrame(rx_buffer_, FRAME_LENGTH, log_details);
           expecting_ctrl_ = false;  // Ctrl frame consumed
+
+          // Snapshot the raw, unmodified CTRL frame as a template for buildFrame()
+          // (added 11 Aug 2026 for Phase 2 TX work). This is deliberately captured
+          // unconditionally -- not gated on hardware_present_ or any decode state --
+          // so it's available as soon as any real CTRL frame has been seen, which is
+          // the earliest point it's safe to build an outgoing frame at all.
+          memcpy(last_ctrl_raw_, rx_buffer_, FRAME_LENGTH);
+          have_last_ctrl_raw_ = true;
         }
         last_frame_time_ = millis();
         return true;
@@ -230,6 +242,12 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
   //             (frame[6] >> 1)=room/controller temperature in degC.
   // frame[0], frame[1], frame[2], frame[5], frame[7] were constant in every example seen
   // so far (0x20, 0x80, 0x00, 0x94, 0x00) -- logged raw below in case that changes.
+  //
+  // This 8-byte corrected frame straddles the raw 16-byte UNIT+CTRL wire cycle:
+  // frame[0..5] = inverted(UNIT[2..7]), frame[6..7] = inverted(CTRL[0..1]). In other
+  // words frame[3]/frame[4] here ARE raw UNIT bytes 5/6 ("B5"/"B6"), just read
+  // inverted -- worked out 11 Aug 2026 while building buildFrame() for Phase 2 TX, see
+  // that function for how this maps back onto outgoing raw CTRL bytes.
   bool corr_power = frame[3] & 0x01;
   uint8_t corr_mode = (frame[3] >> 1) & 0x07;
   uint8_t corr_fan = (frame[3] >> 4) & 0x07;
@@ -283,45 +301,80 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
 }
 
 void FujiHeatPump::buildFrame() {
-  // Build command frame
-  // This is a GUESS - will need to be adjusted based on what we see from the bus.
-  // NOTE (11 Aug 2026, 3B.18): no longer called from FujitsuClimate::control() -- see
-  // that file. Left here, unused, for when Phase 2 transmit is implemented and tested.
-  
-  memset(tx_buffer_, 0, sizeof(tx_buffer_));
-  
-  tx_buffer_[0] = FRAME_START;  // Frame start marker
-  tx_buffer_[1] = secondary_ ? 0x01 : 0x00;  // Controller ID
-  
-  // Byte 2: Flags
-  tx_buffer_[2] = 0;
-  if (on_off_) tx_buffer_[2] |= 0x01;
-  
-  // Byte 3: Mode
-  tx_buffer_[3] = static_cast<uint8_t>(mode_);
-  
-  // Byte 4: Temperature (offset by 16)
-  int temp_byte = static_cast<int>(temperature_ - 16.0f);
-  if (temp_byte < 0) temp_byte = 0;
-  if (temp_byte > 14) temp_byte = 14;  // 16-30degC range
-  tx_buffer_[4] = temp_byte;
-  
-  // Byte 5: Fan mode
-  tx_buffer_[5] = static_cast<uint8_t>(fan_mode_);
-  
-  // Byte 6: Reserved
-  tx_buffer_[6] = 0x00;
-  
-  // Byte 7: Checksum
-  tx_buffer_[7] = calculateChecksum(tx_buffer_, 7);
-  
+  // Build a CTRL-shaped 8-byte command frame -- rewritten 11 Aug 2026 for Phase 2.
+  //
+  // Approach, per plan-to-completion.md Phase 2: the CTRL frame is the wired
+  // controller's own frame shape, so as a secondary controller we emit that shape
+  // rather than invent a new one. We start from the last real CTRL frame actually
+  // captured off the bus (raw, unmodified bytes -- see last_ctrl_raw_ in readFrame())
+  // and only overwrite the two raw bytes now known, via the validated corrected
+  // decode, to carry controller state:
+  //
+  //   raw CTRL byte[5] ("B5")  <- power (bit0) / mode (bits[3:1]) / fan (bits[6:4])
+  //   raw CTRL byte[6] ("B6")  <- setpoint degC (bits[6:0], 0=none) / economy (bit7)
+  //
+  // These are the SAME bytes the corrected decode reads back out of the UNIT frame
+  // (UNIT[5]/UNIT[6] mirror CTRL[5]/CTRL[6] byte-for-byte -- confirmed across all 1112
+  // frames in the 29 Apr captures) -- just inverted, per processCorrectedFrame()'s
+  // frame[3]/frame[4]. So: raw_byte = logical_byte ^ 0xFF.
+  //
+  // raw CTRL byte[3] (0x5F at rest, 0x7E in the 4 instances observed during real
+  // button presses in the 29 Apr captures) is set to 0x7E to mark this as an active
+  // command frame. [hypothesis] -- upstream-comparison.md's addendum offers a
+  // competing "destination/flags byte" reading of this same byte under the
+  // corrected/shifted alignment, which this project has NOT reconciled with the
+  // original change-in-progress-flag reading yet. Using the literal value observed
+  // during real captured button presses is the most evidence-based choice available,
+  // but this whole byte is exactly the kind of thing Phase 2's bench test is meant to
+  // either confirm or falsify -- watch closely for any sign the unit reacts
+  // differently to this than expected.
+  //
+  // Byte[0] (room/controller temperature + mystery bit) is left untouched -- copied
+  // straight from the last real CTRL frame -- since the ESP32 has no temperature
+  // sensor of its own and there's no validated reason yet to touch it.
+  //
+  // NEVER SENT TO THE REAL BUS BEFORE 11 AUG 2026. Per hardware-and-protocol.md's
+  // "ESP32 is never the boss" design principle, this is NOT wired into
+  // FujitsuClimate::control() -- see that method's comment. It is reachable only via
+  // FujitsuClimate::test_setpoint_step(), a single deliberate, manually-triggered
+  // Phase 2 test entry point, so each test step in plan-to-completion.md's strict
+  // order can be tried and checked against the physical wall unit one at a time.
+
+  if (!have_last_ctrl_raw_) {
+    // Never seen a real CTRL frame yet -- nothing safe to copy from. Refuse to
+    // fabricate a frame out of thin air.
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildFrame(): no CTRL frame captured from the bus yet, refusing to build a command frame");
+    return;
+  }
+
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+
+  // raw byte[5]: power / mode / fan, encoded logically then inverted for the wire.
+  uint8_t logical_b5 = 0;
+  logical_b5 |= on_off_ ? 0x01 : 0x00;
+  logical_b5 |= (static_cast<uint8_t>(mode_) & 0x07) << 1;
+  logical_b5 |= (static_cast<uint8_t>(fan_mode_) & 0x07) << 4;
+  tx_buffer_[5] = static_cast<uint8_t>(logical_b5 ^ 0xFF);
+
+  // raw byte[6]: setpoint (0 = none) + economy. Economy is preserved from the last
+  // real frame seen rather than invented here -- setEconomy() doesn't exist yet.
+  uint8_t setpoint_raw = std::isnan(temperature_) ? 0 : static_cast<uint8_t>(temperature_);
+  if (setpoint_raw > 30) setpoint_raw = 30;
+  uint8_t last_logical_b6 = static_cast<uint8_t>(last_ctrl_raw_[6] ^ 0xFF);
+  bool economy_bit = (last_logical_b6 & 0x80) != 0;
+  uint8_t logical_b6 = (setpoint_raw & 0x7F) | (economy_bit ? 0x80 : 0x00);
+  tx_buffer_[6] = static_cast<uint8_t>(logical_b6 ^ 0xFF);
+
+  // raw byte[3]: 0x7E marks an active command frame. [hypothesis] -- see the comment
+  // above buildFrame().
+  tx_buffer_[3] = 0x7E;
+
   has_pending_frame_ = true;
-  
-  if (debug_) {
-    ESP_LOGD(TAG, "Built frame:");
-    for (int i = 0; i < FRAME_LENGTH; i++) {
-      ESP_LOGD(TAG, "  [%d] = 0x%02X", i, tx_buffer_[i]);
-    }
+
+  ESP_LOGW(TAG, "buildFrame(): built CTRL command frame (Phase 2, still unvalidated against real hardware):");
+  for (int i = 0; i < FRAME_LENGTH; i++) {
+    ESP_LOGW(TAG, "  [%d] = 0x%02X (was 0x%02X)", i, tx_buffer_[i], last_ctrl_raw_[i]);
   }
 }
 
@@ -329,24 +382,46 @@ bool FujiHeatPump::sendPendingFrame() {
   if (!has_pending_frame_ || !connected_) {
     return false;
   }
-  
+
   // Wait appropriate delay after last received frame
   uint32_t elapsed = millis() - last_frame_time_;
   if (elapsed < FRAME_REPLY_DELAY_MS) {
     delay(FRAME_REPLY_DELAY_MS - elapsed);
   }
-  
+
   // Send the frame
   uart_->write_array(tx_buffer_, FRAME_LENGTH);
   uart_->flush();
-  
-  ESP_LOGI(TAG, "Sent frame");
-  if (debug_) {
-    for (int i = 0; i < FRAME_LENGTH; i++) {
-      ESP_LOGD(TAG, "  TX[%d] = 0x%02X", i, tx_buffer_[i]);
+
+  // Echo suppression (added 11 Aug 2026 for Phase 2 TX): on this single-wire
+  // (half-duplex) LIN bus our own transmitted bytes come back on RX. Swallow them
+  // here so the next readFrame() call doesn't try to parse our own echo as an
+  // incoming frame. Upstream (unreality/FujiHeatPump) does the same thing
+  // immediately after every write -- see upstream-comparison.md's "Echo suppression"
+  // section. Bounded by a short deadline rather than a fixed byte-count wait, since
+  // if the echo doesn't show up as expected that's itself useful information, not a
+  // reason to hang.
+  uint32_t echo_deadline = millis() + 50;
+  size_t discarded = 0;
+  while (discarded < FRAME_LENGTH && millis() < echo_deadline) {
+    uint8_t echo_byte;
+    if (uart_->read_byte(&echo_byte)) {
+      discarded++;
     }
   }
-  
+  if (discarded < FRAME_LENGTH) {
+    ESP_LOGW(TAG, "sendPendingFrame(): only discarded %d/%d echo bytes after TX -- unexpected, worth noting",
+             (int) discarded, (int) FRAME_LENGTH);
+  }
+
+  // Logged at WARN (not gated behind debug_) -- Phase 2 testing is rare and
+  // deliberate, and knowing exactly what was sent is essential for correlating
+  // against what happens at the physical wall unit immediately afterward.
+  ESP_LOGW(TAG, "Sent TX frame (Phase 2 test, unvalidated against real hardware):");
+  for (int i = 0; i < FRAME_LENGTH; i++) {
+    ESP_LOGW(TAG, "  TX[%d] = 0x%02X", i, tx_buffer_[i]);
+  }
+
   has_pending_frame_ = false;
   return true;
 }
@@ -355,7 +430,7 @@ uint8_t FujiHeatPump::calculateChecksum(const uint8_t *data, size_t len) {
   // Simple 8-bit sum (used by Fujitsu protocol)
   // The checksum is just the sum of all bytes, truncated to 8 bits
   uint16_t sum16 = 0;  // Use 16-bit to see full value
-  
+
   if (debug_) {
     ESP_LOGD(TAG, "Checksum calculation: summing %d bytes:", len);
     for (size_t i = 0; i < len; i++) {
@@ -369,7 +444,7 @@ uint8_t FujiHeatPump::calculateChecksum(const uint8_t *data, size_t len) {
       sum16 += data[i];
     }
   }
-  
+
   return (uint8_t)sum16;  // Truncate to 8 bits
 }
 

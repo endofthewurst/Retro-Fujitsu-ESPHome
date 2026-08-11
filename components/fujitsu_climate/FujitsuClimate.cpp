@@ -1,6 +1,7 @@
 #include "FujitsuClimate.h"
 #include "esphome/core/log.h"
 #include <cstdio>
+#include <cmath>
 
 namespace esphome {
 namespace fujitsu_climate {
@@ -41,8 +42,10 @@ void FujitsuClimate::loop() {
     update_climate_state();
   }
 
-  // NOTE (11 Aug 2026, 3B.18): sendPendingFrame() is intentionally never called here.
-  // See control() below for why TX is disabled.
+  // NOTE (11 Aug 2026, 3B.18): sendPendingFrame() is intentionally never called here
+  // as part of the normal read loop. Phase 2 TX only ever happens synchronously
+  // inside test_setpoint_step() below, one deliberate call at a time -- see
+  // control() for why the general HA control path stays read-only.
 }
 
 void FujitsuClimate::update() {
@@ -181,7 +184,8 @@ void FujitsuClimate::dump_config() {
   ESP_LOGCONFIG(TAG, "  Hardware present: %s", hardware_present_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Controller: Secondary");
   ESP_LOGCONFIG(TAG, "  LIN Interface: TJA1021");
-  ESP_LOGCONFIG(TAG, "  TX: DISABLED (read-only monitoring; see control())");
+  ESP_LOGCONFIG(TAG, "  TX: read-only via HA (control() ignores commands); Phase 2 TX test");
+  ESP_LOGCONFIG(TAG, "      reachable only via test_setpoint_step() / the TX Test buttons");
 }
 
 climate::ClimateTraits FujitsuClimate::traits() {
@@ -228,22 +232,57 @@ climate::ClimateTraits FujitsuClimate::traits() {
 }
 
 void FujitsuClimate::control(const climate::ClimateCall &call) {
-  // TX (Phase 2) has never been implemented against the real bus -- buildFrame() in
-  // FujiHeatPump.cpp is still an explicit "GUESS" at the command frame shape, never
-  // tested live. hardware-and-protocol.md's "ESP32 is never the boss" design
-  // principle requires the wired UTY-RNNUM controller to remain the one actually in
-  // control until Phase 2 transmit is built and validated per
-  // plan-to-completion.md's test plan (setpoint first, then fan, mode, power, each
-  // checked against the physical display). Letting an unvalidated guessed frame reach
-  // the live, working heat pump risks exactly the "controllers disagree" failure mode
-  // Phase 2 exists to catch under controlled conditions.
+  // TX (Phase 2) has not yet been validated against the real bus through this path --
+  // buildFrame() in FujiHeatPump.cpp was rewritten 11 Aug 2026 against the validated
+  // corrected-decode field layout, but has itself never been sent to the real bus
+  // outside of the explicit, single-action test_setpoint_step() below.
+  // hardware-and-protocol.md's "ESP32 is never the boss" design principle requires
+  // the wired UTY-RNNUM controller to remain the one actually in control until Phase 2
+  // transmit is validated per plan-to-completion.md's test plan (setpoint first, then
+  // fan, mode, power, each checked against the physical display). Letting arbitrary,
+  // still-unvalidated HA commands reach the live, working heat pump risks exactly the
+  // "controllers disagree" failure mode Phase 2 exists to catch under controlled
+  // conditions.
   //
-  // As of 11 Aug 2026 (3B.18) this climate entity is READ-ONLY: any command from HA
-  // (mode, temperature, fan, preset) is logged and ignored rather than sent to
-  // FujiHeatPump's setters. Re-enable by wiring these back to hp_.setOnOff() /
-  // setMode() / setTemperature() / setFanMode() once Phase 2 TX is implemented and
-  // tested.
+  // As of 11 Aug 2026 (3B.18) this climate entity remains READ-ONLY for general HA
+  // commands: any command from HA (mode, temperature, fan, preset) is logged and
+  // ignored rather than sent to FujiHeatPump's setters. Re-enable by wiring these back
+  // to hp_.setOnOff() / setMode() / setTemperature() / setFanMode() + sendPendingFrame()
+  // once every step of the Phase 2 test plan has passed via the dedicated test path
+  // (test_setpoint_step(), and its siblings once written for fan/mode/power).
   ESP_LOGW(TAG, "Climate control request ignored -- TX disabled pending Phase 2 validation (read-only monitoring only)");
+}
+
+void FujitsuClimate::test_setpoint_step(int delta_c) {
+  // Phase 2 TX test entry point, added 11 Aug 2026 -- see plan-to-completion.md
+  // Phase 2 step 4: test in strict order, setpoint first (smallest, most reversible
+  // change). Deliberately NOT reachable through control() above -- this is a single,
+  // explicit, manually-triggered action (wired to a dedicated HA button, see
+  // retrofujitsu.yaml) so one specific test step can be tried and its effect on the
+  // physical wall unit checked immediately after, one step at a time, rather than a
+  // general-purpose control path a HA automation or a stray tap could trigger.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_setpoint_step: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_setpoint_step: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  float current = hp_.getTemperature();
+  if (std::isnan(current)) {
+    ESP_LOGW(TAG, "test_setpoint_step: no current setpoint decoded (mode may not support one), refusing");
+    return;
+  }
+  float target = current + static_cast<float>(delta_c);
+  ESP_LOGW(TAG, "TX TEST: requesting setpoint %.0f -> %.0fdegC (Phase 2, unvalidated -- check the wall unit now)",
+           current, target);
+  hp_.setTemperature(target);
+  if (hp_.hasPendingFrame()) {
+    hp_.sendPendingFrame();
+  } else {
+    ESP_LOGW(TAG, "test_setpoint_step: buildFrame() did not produce a pending frame (see its own log for why)");
+  }
 }
 
 void FujitsuClimate::update_climate_state() {

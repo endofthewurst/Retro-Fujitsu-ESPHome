@@ -20,14 +20,22 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   void loop() override;   // reads frames on every main-loop tick
   void update() override; // publishes state to HA on interval
   void dump_config() override;
-  
+
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
-  
+
   // Climate traits
   climate::ClimateTraits traits() override;
-  
+
   // Control the climate
   void control(const climate::ClimateCall &call) override;
+
+  // Phase 2 TX test entry point (added 11 Aug 2026) -- see FujiHeatPump.cpp's
+  // buildFrame() for the frame construction and .cpp below for why this exists as a
+  // separate, deliberate, single-action method rather than being wired through
+  // control() above. delta_c is added to the currently-decoded setpoint and sent as
+  // a one-shot command frame; check the physical wall unit immediately after calling
+  // this, per plan-to-completion.md Phase 2's test order (setpoint first).
+  void test_setpoint_step(int delta_c);
 
   // Bus health diagnostics (added 10 Aug 2026) -- optional, set only if configured
   // in YAML via the fujitsu_climate binary_sensor/text_sensor/sensor platforms.
@@ -39,7 +47,7 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   void set_corrected_room_temp_sensor(sensor::Sensor *s) { corrected_room_temp_sensor_ = s; }
   void set_corrected_economy_text_sensor(text_sensor::TextSensor *s) { corrected_economy_text_sensor_ = s; }
   void set_mystery_bit_text_sensor(text_sensor::TextSensor *s) { mystery_bit_text_sensor_ = s; }
-  
+
  protected:
   FujiHeatPump hp_;
   bool hardware_present_{false};
@@ -70,8 +78,10 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // oscilloscope/logic-analyzer capture on the LIN line during a gap, which isn't
   // possible remotely. Widening the timeout is a pragmatic mitigation (stop the
   // diagnostic from flapping on what may be normal short quiet spells), not a
-  // diagnosed fix -- if flicker continues even at 4000ms, that's a stronger signal
-  // the underlying gaps are longer than ~1s and worth investigating further.
+  // diagnosed fix. A follow-up HA-history check (11 Aug 2026, later same day) found
+  // zero flicker events across ~1.5h of runtime at this setting, vs. ~1/53s
+  // immediately before the change -- looking like it's working in practice, though
+  // still worth another check after a longer unattended run.
   static constexpr uint32_t BUS_FRAME_TIMEOUT_MS = 4000;
   static constexpr uint32_t BUS_BYTE_TIMEOUT_MS = 4000;
 
@@ -87,10 +97,10 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // times/sec), and its float formatting (%.1f x2) was a remaining contributor to
   // component-loop overruns after the FujiHeatPump-side dumps were throttled.
   uint32_t state_log_last_ms_{0};
-  
+
   // Update Home Assistant with current state
   void update_climate_state();
-  
+
   // Conversion helpers
   climate::ClimateMode fuji_mode_to_climate_mode(FujiMode mode);
   FujiMode climate_mode_to_fuji_mode(climate::ClimateMode mode);
