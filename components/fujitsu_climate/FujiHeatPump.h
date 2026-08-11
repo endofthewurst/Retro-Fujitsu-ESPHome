@@ -70,25 +70,25 @@ enum class FujiFanMode : uint8_t {
 class FujiHeatPump {
  public:
   FujiHeatPump() = default;
-  
+
   // Initialize connection
   void connect(uart::UARTComponent *uart, bool secondary);
-  
+
   // Frame reading (non-blocking -- call from loop())
   bool readFrame();
-  
+
   // State setters (prepare frame for sending). NOTE: as of 3B.18 these are no longer
-  // called from FujitsuClimate::control() -- see that file's comment. buildFrame()'s
-  // output has never been validated against the live bus (still an explicit "GUESS",
-  // see buildFrame() below) and the project's "ESP32 is never the boss" design
-  // principle (hardware-and-protocol.md) requires that not go out on the wire until
-  // Phase 2 transmit is implemented and tested per plan-to-completion.md. Left in
-  // place, unused for now, for when that work happens.
+  // called from FujitsuClimate::control() (still read-only pending broader Phase 2
+  // validation) -- but as of the Phase 2 TX-test work (11 Aug 2026), they ARE called
+  // from FujitsuClimate::test_setpoint_step(), a single deliberate, manually-triggered
+  // test entry point (see that method and buildFrame() below). buildFrame()'s output
+  // has never been sent to the real bus before this -- see buildFrame() for the
+  // current, corrected-decode-based approach and its own caveats.
   void setOnOff(bool on);
   void setMode(FujiMode mode);
   void setTemperature(float temp);
   void setFanMode(FujiFanMode fan);
-  
+
   // State getters (from received frames). As of 3B.18, these are populated from the
   // corrected decode (see processCorrectedFrame()) rather than the old parseFrame()/
   // parseCTRLFrame() below -- promoted to primary after Session B validated the
@@ -99,14 +99,14 @@ class FujiHeatPump {
   float getTemperature() const { return temperature_; }
   float getCurrentTemperature() const { return current_temperature_; }
   FujiFanMode getFanMode() const { return fan_mode_; }
-  
+
   // Send pending changes
   bool sendPendingFrame();
   bool hasPendingFrame() const { return has_pending_frame_; }
-  
+
   // Checksum calculation
   uint8_t calculateChecksum(const uint8_t *data, size_t len);
-  
+
   // Debug helpers
   void setDebug(bool debug) { debug_ = debug; }
   bool isConnected() const { return connected_; }
@@ -137,13 +137,18 @@ class FujiHeatPump {
   // "Mystery Bit" pending further investigation -- do not treat this as a trusted
   // Thermo Sensor readout yet.
   bool getCorrMysteryBit() const { return corr_mystery_bit_; }
-  
+
+  // Whether a real CTRL frame has ever been captured off the bus -- buildFrame()
+  // refuses to build a command frame without one to use as a template (added for
+  // Phase 2 TX work, 11 Aug 2026).
+  bool hasLastCtrlRaw() const { return have_last_ctrl_raw_; }
+
  protected:
   uart::UARTComponent *uart_{nullptr};
   bool secondary_{true};
   bool connected_{false};
   bool debug_{false};
-  
+
   // Current state (from bus) -- NAN until first frame received. As of 3B.18, written
   // by processCorrectedFrame() below, not by parseFrame()/parseCTRLFrame().
   bool on_off_{false};
@@ -151,19 +156,30 @@ class FujiHeatPump {
   float temperature_{NAN};
   float current_temperature_{NAN};
   FujiFanMode fan_mode_{FujiFanMode::FAN_AUTO};
-  
+
   // Pending changes flag
   bool has_pending_frame_{false};
 
   // Protocol sync state: after a valid unit frame, the very next 8 bytes are
   // the ctrl frame regardless of start byte. This flag gates that acceptance.
   bool expecting_ctrl_{false};
-  
+
   // Frame buffers
   uint8_t rx_buffer_[32];
   uint8_t tx_buffer_[32];
   size_t rx_index_{0};
-  
+
+  // Last real, unmodified CTRL frame captured off the bus (raw wire bytes, NOT
+  // inverted) -- added for Phase 2 TX work, 11 Aug 2026. buildFrame() copies this as
+  // its starting template rather than constructing a frame from scratch, per
+  // plan-to-completion.md's Phase 2 approach ("the CTRL frame is the wired
+  // controller's own frame, so as a secondary controller the ESP32 should emit that
+  // shape"). Populated in readFrame() whenever a structurally valid CTRL frame is
+  // seen -- independent of hardware_present_/decode state, so it's available as soon
+  // as any real CTRL frame has been observed.
+  uint8_t last_ctrl_raw_[FRAME_LENGTH]{};
+  bool have_last_ctrl_raw_{false};
+
   // Parse received frames -- retained for frame-structure sync (used by the Bus
   // Alive/Bus Status diagnostics) and for legacy debug logging. As of 3B.18 these no
   // longer write on_off_/mode_/temperature_/fan_mode_ -- see processCorrectedFrame().
@@ -176,7 +192,7 @@ class FujiHeatPump {
 
   // Build transmit frame
   void buildFrame();
-  
+
   // Timing
   uint32_t last_frame_time_{0};
   uint32_t last_any_byte_time_{0};  // set on every raw byte, regardless of validity (added 10 Aug 2026)
@@ -195,6 +211,13 @@ class FujiHeatPump {
   // on_off_/mode_/temperature_/current_temperature_/fan_mode_ directly (see
   // processCorrectedFrame()) and is also mirrored to standalone diagnostic HA entities
   // for cross-checking.
+  //
+  // Byte mapping to the raw 16-byte UNIT+CTRL wire cycle (worked out 11 Aug 2026 for
+  // Phase 2 TX -- this window straddles the frame boundary, it is NOT just the UNIT
+  // frame): corr frame[0..5] = inverted(UNIT[2..7]), corr frame[6..7] =
+  // inverted(CTRL[0..1]). So UNIT[5] ("B5") == inverted frame[3], UNIT[6] ("B6") ==
+  // inverted frame[4], and CTRL[0] ("C0") == inverted frame[6]. This is how
+  // buildFrame() below maps its writes back onto raw CTRL bytes 5 and 6.
   enum class CorrSyncState : uint8_t { SEEK_FE, SKIP_ONE, CAPTURE };
   CorrSyncState corr_state_{CorrSyncState::SEEK_FE};
   uint8_t corr_buf_[8];
