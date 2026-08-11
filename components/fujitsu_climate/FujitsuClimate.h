@@ -57,8 +57,23 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   text_sensor::TextSensor *mystery_bit_text_sensor_{nullptr};
 
   // Bus-alive/status thresholds (ms) -- see update_bus_status_() for the logic.
-  static constexpr uint32_t BUS_FRAME_TIMEOUT_MS = 2000;
-  static constexpr uint32_t BUS_BYTE_TIMEOUT_MS = 2000;
+  // Widened 2000 -> 4000ms on 11 Aug 2026 (3B.19): removing the unthrottled per-byte
+  // ESP_LOGV (3B.18) did NOT eliminate the Bus Alive flicker -- HA history afterward
+  // still showed recurring ~1s "off"/"No Signal" blips at irregular intervals (5s to
+  // 144s apart), while `binary_sensor.aircon_status`/`sensor.aircon_uptime` stayed
+  // perfectly solid the whole time (no reboot, no WiFi drop) -- so this is isolated to
+  // the UART bus reception specifically, not a device-wide hiccup, and the 3B.18
+  // logging theory was wrong or at best incomplete. "No Signal" (not "Noise") means
+  // genuinely zero bytes arrived, not malformed ones. Root cause still unconfirmed --
+  // could be inherent to the physical bus/protocol (a real, harmless quiet period) or
+  // an as-yet-unidentified software stall; ruling it out further needs a live
+  // oscilloscope/logic-analyzer capture on the LIN line during a gap, which isn't
+  // possible remotely. Widening the timeout is a pragmatic mitigation (stop the
+  // diagnostic from flapping on what may be normal short quiet spells), not a
+  // diagnosed fix -- if flicker continues even at 4000ms, that's a stronger signal
+  // the underlying gaps are longer than ~1s and worth investigating further.
+  static constexpr uint32_t BUS_FRAME_TIMEOUT_MS = 4000;
+  static constexpr uint32_t BUS_BYTE_TIMEOUT_MS = 4000;
 
   void update_bus_status_();
 

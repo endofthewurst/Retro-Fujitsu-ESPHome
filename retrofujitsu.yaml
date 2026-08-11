@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.18"
+    version: "3B.19"
   on_boot:
     priority: 600
     then:
@@ -25,10 +25,10 @@ esp32:
 
 # Logging: dropped from VERBOSE to DEBUG 11 Aug 2026 (3B.18). VERBOSE compiled in an
 # unconditional per-byte ESP_LOGV in FujiHeatPump::readFrame() that fired on every
-# single byte of continuous bus traffic (~50/sec) -- the leading suspect for the
-# binary_sensor.house_aircon_bus_alive flicker seen increasingly often in Session B,
-# same class of hot-path-logging problem as the earlier crash-loop fix. DEBUG still
-# keeps the throttled (1/sec) per-frame dumps below via the per-tag levels.
+# single byte of continuous bus traffic (~50/sec) -- a real hot-path cost, same class
+# of problem as the earlier crash-loop fix, worth removing regardless -- but it did
+# NOT turn out to be the whole story behind the Bus Alive flicker; see
+# FujitsuClimate.h's BUS_FRAME_TIMEOUT_MS comment (3B.19) for what happened next.
 logger:
   level: DEBUG
   baud_rate: 115200
@@ -194,10 +194,10 @@ sensor:
   - platform: fujitsu_climate
     fujitsu_climate_id: fujitsu_hp
     corrected_setpoint:
-      name: "Corrected Setpoint"
+      name: "Setpoint"
       id: corrected_setpoint
     corrected_room_temp:
-      name: "Corrected Room Temp"
+      name: "Room Temp"
       id: corrected_room_temp
 
 # Text sensors
@@ -220,13 +220,13 @@ text_sensor:
       name: "Bus Status"
       id: bus_status
     corrected_mode:
-      name: "Corrected Mode"
+      name: "Mode"
       id: corrected_mode
     corrected_fan_raw:
-      name: "Corrected Fan Raw"
+      name: "Fan"
       id: corrected_fan_raw
     corrected_economy:
-      name: "Corrected Economy"
+      name: "Economy"
       id: corrected_economy
     mystery_bit:
       name: "Mystery Bit"
