@@ -116,6 +116,13 @@ bool FujiHeatPump::readFrame() {
           memcpy(last_ctrl_raw_, rx_buffer_, FRAME_LENGTH);
           have_last_ctrl_raw_ = true;
         }
+
+        // Boot/discovery-probe instrumentation (added 14 Aug 2026) -- runs on every
+        // valid frame unconditionally, but recordBootProbe_() itself is a no-op once
+        // the bounded capture window has closed, so this never becomes a sustained
+        // per-frame cost. See FujiHeatPump.h for the full explanation.
+        recordBootProbe_(rx_buffer_, valid_ctrl);
+
         last_frame_time_ = millis();
         return true;
       } else {
@@ -130,6 +137,80 @@ bool FujiHeatPump::readFrame() {
   }
 
   return false;
+}
+
+// --- Boot/discovery-probe instrumentation (added 14 Aug 2026, Phase 2 item 2) ---
+// See FujiHeatPump.h for the full explanation and protocol-review-and-next-
+// experiments.md for the background. Goal: across a normal power cycle (both the
+// Fujitsu unit and the ESP32 coming up together on the shared 12V rail), find out
+// whether/when the primary's one-shot ~4-second secondary-controller discovery
+// probe arrives, and whether this project's current boot sequence would even be
+// listening in time to catch it -- neither has ever actually been observed.
+
+void FujiHeatPump::recordBootProbe_(const uint8_t *frame, bool is_ctrl) {
+  uint32_t elapsed = millis();  // deliberately time-since-chip-boot, not time-since-setup() -- see header note
+  if (elapsed > BOOT_CAPTURE_WINDOW_MS) return;  // window closed -- stop capturing, never a sustained cost
+
+  if (boot_first_frame_ms_ < 0) {
+    boot_first_frame_ms_ = static_cast<int32_t>(elapsed);
+  }
+
+  // Candidate 1: raw CTRL byte[3] deviating from its 0x5F rest value. Established in
+  // hardware-and-protocol.md as the "change-in-progress flag" and reinterpreted in
+  // upstream-comparison.md's addendum as a destination/flags byte (0x5F = dest 32
+  // i.e. the wired controller; 0x7E = dest 1) -- either reading makes an early,
+  // pre-any-button-press sighting of this a strong discovery-probe candidate.
+  if (is_ctrl && frame[3] != 0x5F) {
+    boot_ctrl3_alt_count_++;
+    if (boot_ctrl3_alt_ms_ < 0) boot_ctrl3_alt_ms_ = static_cast<int32_t>(elapsed);
+  }
+
+  // Candidate 2: raw UNIT bytes[1]/[2] deviating from their 0xDF rest value --
+  // upstream-comparison.md's still-open "source reads 32 and 0, where upstream
+  // expects 32 and 1" item. Not confirmed, but cheap to watch for alongside
+  // candidate 1 rather than betting everything on one hypothesis.
+  if (!is_ctrl && (frame[1] != 0xDF || frame[2] != 0xDF)) {
+    boot_unit_addr_alt_count_++;
+    if (boot_unit_addr_alt_ms_ < 0) boot_unit_addr_alt_ms_ = static_cast<int32_t>(elapsed);
+  }
+
+  // Raw safety-net capture: in case neither established candidate above is actually
+  // the discovery signal, keep the full raw bytes so a human can look at everything
+  // that happened in the boot window, not just what these two heuristics flagged.
+  if (boot_capture_count_ < BOOT_CAPTURE_MAX) {
+    BootCaptureEntry &e = boot_capture_[boot_capture_count_++];
+    e.t_ms = elapsed;
+    e.is_ctrl = is_ctrl;
+    memcpy(e.bytes, frame, FRAME_LENGTH);
+  }
+}
+
+void FujiHeatPump::maybeDumpBootCapture() {
+  if (boot_capture_dumped_) return;
+  // Small margin past the window close so any last frame right at the boundary is
+  // captured before we dump -- this is a one-time event, cost doesn't matter.
+  if (millis() <= BOOT_CAPTURE_WINDOW_MS + 500) return;
+  boot_capture_dumped_ = true;
+
+  ESP_LOGI(TAG, "=== Boot capture dump: %d frames captured in first %ums ===",
+           (int) boot_capture_count_, (unsigned) BOOT_CAPTURE_WINDOW_MS);
+  ESP_LOGI(TAG, "  first frame seen at: %dms", boot_first_frame_ms_);
+  ESP_LOGI(TAG, "  CTRL[3]!=0x5F (candidate 1): count=%u first_at=%dms",
+           boot_ctrl3_alt_count_, boot_ctrl3_alt_ms_);
+  ESP_LOGI(TAG, "  UNIT[1/2]!=0xDF (candidate 2): count=%u first_at=%dms",
+           boot_unit_addr_alt_count_, boot_unit_addr_alt_ms_);
+  for (size_t i = 0; i < boot_capture_count_; i++) {
+    BootCaptureEntry &e = boot_capture_[i];
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t j = 0; j < FRAME_LENGTH; j++) {
+      snprintf(hex_buf + j * 3, 4, "%02X ", e.bytes[j]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    bool flagged = (e.is_ctrl && e.bytes[3] != 0x5F) || (!e.is_ctrl && (e.bytes[1] != 0xDF || e.bytes[2] != 0xDF));
+    ESP_LOGI(TAG, "  [%5ums] %s: %s%s", (unsigned) e.t_ms, e.is_ctrl ? "CTRL" : "UNIT", hex_buf,
+             flagged ? "  *** CANDIDATE ***" : "");
+  }
+  ESP_LOGI(TAG, "=== end boot capture dump ===");
 }
 
 void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len, bool log_details) {

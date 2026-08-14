@@ -21,7 +21,22 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   void update() override; // publishes state to HA on interval
   void dump_config() override;
 
-  float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
+  // Changed 14 Aug 2026 from AFTER_WIFI to HARDWARE -- this was a directly-confirmed
+  // finding from the Phase 2 item 4 investigation (protocol-review-and-
+  // next-experiments.md / plan-to-completion.md's "confirm UART init happens in
+  // setup() before WiFi/API connect" open item): this component's setup() -- which
+  // calls hp_.connect() -- was explicitly scheduled to run AFTER WiFi finished
+  // connecting, not before. On a shared power rail where the ESP32 and the Fujitsu
+  // unit boot together, WiFi association can easily take longer than the ~4-second
+  // discovery-probe window, meaning readFrame() (called from loop(), which ESPHome
+  // only starts invoking after setup()) might not even be listening yet when the
+  // probe arrives -- independent of and possibly compounding the parity/binding
+  // questions elsewhere in Phase 2. HARDWARE runs well before WIFI's own priority, so
+  // the UART hookup now happens as early as this component can make it, matching the
+  // "the ESP32 must never be the reason a real-time bus event is missed" spirit of
+  // hardware-and-protocol.md. Nothing in setup() below actually depends on WiFi/API
+  // being up, so this should be safe.
+  float get_setup_priority() const override { return setup_priority::HARDWARE; }
 
   // Climate traits
   climate::ClimateTraits traits() override;
@@ -47,6 +62,11 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   void set_corrected_room_temp_sensor(sensor::Sensor *s) { corrected_room_temp_sensor_ = s; }
   void set_corrected_economy_text_sensor(text_sensor::TextSensor *s) { corrected_economy_text_sensor_ = s; }
   void set_mystery_bit_text_sensor(text_sensor::TextSensor *s) { mystery_bit_text_sensor_ = s; }
+  // Boot/discovery-probe diagnostic (added 14 Aug 2026) -- see update_boot_probe_()
+  // and FujiHeatPump.h for the full explanation. A single compact text_sensor rather
+  // than several numeric ones, to avoid adding five new entities for what's
+  // fundamentally one exploratory diagnostic.
+  void set_boot_probe_text_sensor(text_sensor::TextSensor *s) { boot_probe_text_sensor_ = s; }
 
  protected:
   FujiHeatPump hp_;
@@ -63,6 +83,8 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // FujiHeatPump.h's getCorrMysteryBit() comment). Kept as a diagnostic until it's
   // understood.
   text_sensor::TextSensor *mystery_bit_text_sensor_{nullptr};
+  text_sensor::TextSensor *boot_probe_text_sensor_{nullptr};
+  bool boot_probe_published_{false};  // publish the summary once it's ready, not every tick
 
   // Bus-alive/status thresholds (ms) -- see update_bus_status_() for the logic.
   // Widened 2000 -> 4000ms on 11 Aug 2026 (3B.19): removing the unthrottled per-byte
@@ -91,6 +113,10 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // in parallel with the same decode now driving the main climate entity's state
   // (see update_climate_state()) -- lets the two be cross-checked against each other.
   void update_corrected_diagnostics_();
+
+  // Publishes the boot/discovery-probe summary once the capture window has closed
+  // (added 14 Aug 2026) -- see FujiHeatPump.h/.cpp for the capture logic itself.
+  void update_boot_probe_();
 
   // Throttles the `State updated` log in update_climate_state() to 1/sec (added 10
   // Aug 2026) -- under real live-bus traffic this fired on every valid frame (several

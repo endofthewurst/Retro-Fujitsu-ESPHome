@@ -59,6 +59,7 @@ void FujitsuClimate::update() {
   // arrives, not just stay silent forever.
   update_bus_status_();
   update_corrected_diagnostics_();
+  update_boot_probe_();
 }
 
 void FujitsuClimate::update_bus_status_() {
@@ -177,6 +178,28 @@ void FujitsuClimate::update_corrected_diagnostics_() {
       mystery_bit_text_sensor_->publish_state(hp_.getCorrMysteryBit() ? "Bit=1" : "Bit=0");
     }
   }
+}
+
+void FujitsuClimate::update_boot_probe_() {
+  // Always let the (cheap, self-limiting, one-time) log dump happen regardless of
+  // whether the text_sensor is configured in YAML -- it's useful via live log
+  // capture even without the HA entity.
+  hp_.maybeDumpBootCapture();
+
+  if (boot_probe_text_sensor_ == nullptr || boot_probe_published_) {
+    return;  // Not configured, or already published once -- this is a one-shot summary.
+  }
+  if (!hp_.isBootCaptureDumped()) {
+    return;  // Capture window hasn't closed yet.
+  }
+  boot_probe_published_ = true;
+
+  char buf[200];
+  snprintf(buf, sizeof(buf),
+           "first=%dms ctrl3_alt=%u@%dms unit_addr_alt=%u@%dms captured=%d",
+           hp_.getBootFirstFrameMs(), hp_.getBootCtrl3AltCount(), hp_.getBootCtrl3AltMs(),
+           hp_.getBootUnitAddrAltCount(), hp_.getBootUnitAddrAltMs(), (int) hp_.getBootCaptureCount());
+  boot_probe_text_sensor_->publish_state(buf);
 }
 
 void FujitsuClimate::dump_config() {

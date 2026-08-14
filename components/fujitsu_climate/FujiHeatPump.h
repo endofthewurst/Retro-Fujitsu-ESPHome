@@ -143,6 +143,32 @@ class FujiHeatPump {
   // Phase 2 TX work, 11 Aug 2026).
   bool hasLastCtrlRaw() const { return have_last_ctrl_raw_; }
 
+  // --- Boot/discovery-probe instrumentation (added 14 Aug 2026, Phase 2 item 2 --
+  // see protocol-review-and-next-experiments.md) ---
+  // Looks for the ~4-second one-shot secondary-controller discovery probe that
+  // unreality/FujiHeatPump's README describes, across a normal power cycle. Tracks
+  // two established candidate signals directly (raw CTRL byte[3] deviating from its
+  // 0x5F rest value -- see hardware-and-protocol.md's "change-in-progress flag" /
+  // upstream-comparison.md's "destination-1" reading of the same byte; and raw UNIT
+  // bytes[1]/[2] deviating from their 0xDF rest value -- the address-byte candidate
+  // from upstream-comparison.md's "source reads 32 and 0, where upstream expects 32
+  // and 1" open item) -- plus a bounded raw-frame capture as a safety net, since
+  // neither candidate is fully confirmed as THE discovery signal. All timestamps
+  // below are raw millis() (time since actual chip boot/reset), deliberately NOT
+  // time since this component's setup() ran -- see FujitsuClimate.h's
+  // get_setup_priority() note for why that distinction matters here. -1 means "not
+  // seen yet within the capture window".
+  int32_t getBootFirstFrameMs() const { return boot_first_frame_ms_; }
+  int32_t getBootCtrl3AltMs() const { return boot_ctrl3_alt_ms_; }
+  uint16_t getBootCtrl3AltCount() const { return boot_ctrl3_alt_count_; }
+  int32_t getBootUnitAddrAltMs() const { return boot_unit_addr_alt_ms_; }
+  uint16_t getBootUnitAddrAltCount() const { return boot_unit_addr_alt_count_; }
+  size_t getBootCaptureCount() const { return boot_capture_count_; }
+  bool isBootCaptureDumped() const { return boot_capture_dumped_; }
+  // Call roughly once a second (e.g. from FujitsuClimate::update()) -- a cheap no-op
+  // check until the boot window closes, then performs exactly one bounded log dump.
+  void maybeDumpBootCapture();
+
  protected:
   uart::UARTComponent *uart_{nullptr};
   bool secondary_{true};
@@ -179,6 +205,28 @@ class FujiHeatPump {
   // as any real CTRL frame has been observed.
   uint8_t last_ctrl_raw_[FRAME_LENGTH]{};
   bool have_last_ctrl_raw_{false};
+
+  // --- Boot/discovery-probe instrumentation (added 14 Aug 2026) -- see the public
+  // getters above and FujiHeatPump.cpp's recordBootProbe_()/maybeDumpBootCapture()
+  // for the full explanation. Bounded to BOOT_CAPTURE_WINDOW_MS so this can never
+  // become a sustained hot-path logging cost like the crash-loop/overrun bugs this
+  // codebase already had to fix once each (see readFrame()'s log_details comments).
+  static const uint32_t BOOT_CAPTURE_WINDOW_MS = 12000;  // 12s -- comfortable margin over the ~4s probe
+  static const size_t BOOT_CAPTURE_MAX = 500;            // ~12s at the observed ~32 valid-frames/sec rate
+  struct BootCaptureEntry {
+    uint32_t t_ms;
+    bool is_ctrl;
+    uint8_t bytes[FRAME_LENGTH];
+  };
+  BootCaptureEntry boot_capture_[BOOT_CAPTURE_MAX];
+  size_t boot_capture_count_{0};
+  bool boot_capture_dumped_{false};
+  int32_t boot_first_frame_ms_{-1};
+  int32_t boot_ctrl3_alt_ms_{-1};
+  uint16_t boot_ctrl3_alt_count_{0};
+  int32_t boot_unit_addr_alt_ms_{-1};
+  uint16_t boot_unit_addr_alt_count_{0};
+  void recordBootProbe_(const uint8_t *frame, bool is_ctrl);
 
   // Parse received frames -- retained for frame-structure sync (used by the Bus
   // Alive/Bus Status diagnostics) and for legacy debug logging. As of 3B.18 these no
