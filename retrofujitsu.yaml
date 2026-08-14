@@ -49,7 +49,7 @@ uart:
       pullup: true   # Critical: prevents RX float -> garbage bytes -> crash when bus disconnected
   baud_rate: 500
   data_bits: 8
-  parity: NONE
+  parity: EVEN  # 3B.21: switched from NONE (8N1) to EVEN (8E1) - upstream requires 8E1 for TX, testing whether this unblocks the 3B.20 null TX result
   stop_bits: 1
 
 # WiFi
