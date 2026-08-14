@@ -169,6 +169,45 @@ class FujiHeatPump {
   // check until the boot window closes, then performs exactly one bounded log dump.
   void maybeDumpBootCapture();
 
+  // --- Inter-frame timing instrumentation (added 14 Aug 2026, Phase 2 item 5 -- see
+  // protocol-review-and-next-experiments.md) ---
+  // `sendPendingFrame()`'s FRAME_REPLY_DELAY_MS (60ms) has been an untested guess since
+  // before this project's current maintainers touched it -- 3B.20/3B.21's null TX
+  // results were never actually checked against real measured bus timing. This
+  // instruments the two frame-boundary gaps in the live 16-byte UNIT+CTRL cycle
+  // directly: UNIT-end -> CTRL-start (expected ~0, same cycle, a sanity baseline) and
+  // CTRL-end -> next-UNIT-start (the "is there actually an idle window here at all"
+  // question -- if this is also ~0, i.e. continuous back-to-back traffic with no gap,
+  // that alone would explain the 3B.20/3B.21 null results regardless of what
+  // FRAME_REPLY_DELAY_MS is set to, since any TX attempt would land on top of live
+  // traffic no matter the delay). Unlike the boot/discovery-probe capture above, this
+  // doesn't depend on any boot-time event -- steady-state running bus traffic is
+  // exactly what's being measured, so the capture window can run from boot without
+  // needing a power cycle. Caveat: timestamps are taken when this component's
+  // readFrame() actually reads each byte out of the UART's software/hardware buffer,
+  // not exact wire-arrival time -- under normal conditions (loop() running frequently)
+  // these should track closely, but a stalled loop() could introduce noise. All
+  // microsecond-resolution since 500 baud puts byte times at ~2ms and gaps of interest
+  // could plausibly be well under a millisecond.
+  uint32_t getTimingUnitToCtrlCount() const { return unit_to_ctrl_gap_.count; }
+  uint32_t getTimingUnitToCtrlMinUs() const { return unit_to_ctrl_gap_.count ? unit_to_ctrl_gap_.min_us : 0; }
+  uint32_t getTimingUnitToCtrlMaxUs() const { return unit_to_ctrl_gap_.max_us; }
+  uint32_t getTimingUnitToCtrlAvgUs() const {
+    return unit_to_ctrl_gap_.count ? static_cast<uint32_t>(unit_to_ctrl_gap_.sum_us / unit_to_ctrl_gap_.count) : 0;
+  }
+  uint32_t getTimingCtrlToUnitCount() const { return ctrl_to_unit_gap_.count; }
+  uint32_t getTimingCtrlToUnitMinUs() const { return ctrl_to_unit_gap_.count ? ctrl_to_unit_gap_.min_us : 0; }
+  uint32_t getTimingCtrlToUnitMaxUs() const { return ctrl_to_unit_gap_.max_us; }
+  uint32_t getTimingCtrlToUnitAvgUs() const {
+    return ctrl_to_unit_gap_.count ? static_cast<uint32_t>(ctrl_to_unit_gap_.sum_us / ctrl_to_unit_gap_.count) : 0;
+  }
+  bool isTimingCaptureDumped() const { return timing_capture_dumped_; }
+  // Call roughly once a second (e.g. from FujitsuClimate::update()) -- a cheap no-op
+  // check until the capture window closes, then performs exactly one bounded log dump
+  // of the individual CTRL->UNIT gap samples (min/max/avg alone could hide a bimodal
+  // pattern, e.g. "most cycles have no gap but every Nth one does").
+  void maybeDumpTimingCapture();
+
  protected:
   uart::UARTComponent *uart_{nullptr};
   bool secondary_{true};
@@ -227,6 +266,28 @@ class FujiHeatPump {
   int32_t boot_unit_addr_alt_ms_{-1};
   uint16_t boot_unit_addr_alt_count_{0};
   void recordBootProbe_(const uint8_t *frame, bool is_ctrl);
+
+  // --- Inter-frame timing instrumentation (added 14 Aug 2026) -- see the public
+  // getters above and FujiHeatPump.cpp's recordFrameTiming_()/maybeDumpTimingCapture()
+  // for the full explanation.
+  static const uint32_t TIMING_CAPTURE_WINDOW_MS = 15000;  // 15s of steady-state running, no power cycle needed
+  static const size_t TIMING_SAMPLE_MAX = 60;  // bounded raw CTRL->UNIT gap samples, ~15s at the observed cycle rate
+  struct GapStats {
+    uint32_t count{0};
+    uint32_t min_us{0xFFFFFFFFu};  // avoids relying on UINT32_MAX's macro/header availability
+    uint32_t max_us{0};
+    uint64_t sum_us{0};
+  };
+  GapStats unit_to_ctrl_gap_;
+  GapStats ctrl_to_unit_gap_;
+  uint32_t ctrl_to_unit_samples_us_[TIMING_SAMPLE_MAX];
+  size_t ctrl_to_unit_sample_count_{0};
+  bool timing_capture_dumped_{false};
+  uint32_t frame_start_us_{0};       // micros() at the first byte of the frame currently being assembled
+  uint32_t prev_frame_end_us_{0};    // micros() at completion of the last valid frame (UNIT or CTRL)
+  bool have_prev_frame_end_{false};
+  bool prev_frame_was_ctrl_{false};
+  void recordFrameTiming_(bool is_ctrl);
 
   // Parse received frames -- retained for frame-structure sync (used by the Bus
   // Alive/Bus Status diagnostics) and for legacy debug logging. As of 3B.18 these no

@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.22"
+    version: "3B.23"
   on_boot:
     priority: 600
     then:
@@ -234,6 +234,9 @@ text_sensor:
     boot_probe:
       name: "Boot Probe"
       id: boot_probe
+    frame_timing:
+      name: "Frame Timing"
+      id: frame_timing
 
 # Binary sensors
 binary_sensor:

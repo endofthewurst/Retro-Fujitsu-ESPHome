@@ -60,6 +60,7 @@ void FujitsuClimate::update() {
   update_bus_status_();
   update_corrected_diagnostics_();
   update_boot_probe_();
+  update_frame_timing_();
 }
 
 void FujitsuClimate::update_bus_status_() {
@@ -200,6 +201,31 @@ void FujitsuClimate::update_boot_probe_() {
            hp_.getBootFirstFrameMs(), hp_.getBootCtrl3AltCount(), hp_.getBootCtrl3AltMs(),
            hp_.getBootUnitAddrAltCount(), hp_.getBootUnitAddrAltMs(), (int) hp_.getBootCaptureCount());
   boot_probe_text_sensor_->publish_state(buf);
+}
+
+void FujitsuClimate::update_frame_timing_() {
+  // Always let the (cheap, self-limiting, one-time) log dump happen regardless of
+  // whether the text_sensor is configured in YAML -- same rationale as
+  // update_boot_probe_() above, and it's the only place the individual CTRL->UNIT
+  // gap samples are visible (the HA summary below only carries the aggregate stats).
+  hp_.maybeDumpTimingCapture();
+
+  if (frame_timing_text_sensor_ == nullptr || frame_timing_published_) {
+    return;  // Not configured, or already published once -- this is a one-shot summary.
+  }
+  if (!hp_.isTimingCaptureDumped()) {
+    return;  // Capture window hasn't closed yet.
+  }
+  frame_timing_published_ = true;
+
+  char buf[220];
+  snprintf(buf, sizeof(buf),
+           "u2c: n=%u min=%.1fms max=%.1fms avg=%.1fms | c2u: n=%u min=%.1fms max=%.1fms avg=%.1fms",
+           hp_.getTimingUnitToCtrlCount(), hp_.getTimingUnitToCtrlMinUs() / 1000.0f,
+           hp_.getTimingUnitToCtrlMaxUs() / 1000.0f, hp_.getTimingUnitToCtrlAvgUs() / 1000.0f,
+           hp_.getTimingCtrlToUnitCount(), hp_.getTimingCtrlToUnitMinUs() / 1000.0f,
+           hp_.getTimingCtrlToUnitMaxUs() / 1000.0f, hp_.getTimingCtrlToUnitAvgUs() / 1000.0f);
+  frame_timing_text_sensor_->publish_state(buf);
 }
 
 void FujitsuClimate::dump_config() {
