@@ -57,6 +57,10 @@ bool FujiHeatPump::readFrame() {
       // only while expecting_ctrl_ is set. Everything else is discarded until
       // we see 0xFE again -- this prevents the infinite offset-drift loop.
       if (byte == FRAME_START || expecting_ctrl_) {
+        // Timestamp the first byte of this candidate frame for the inter-frame timing
+        // instrumentation below (added 14 Aug 2026) -- micros() rather than millis()
+        // since the gaps being measured could plausibly be sub-millisecond.
+        frame_start_us_ = micros();
         rx_buffer_[rx_index_++] = byte;
         // expecting_ctrl_ stays set until the full 8-byte ctrl frame is done
       }
@@ -122,6 +126,11 @@ bool FujiHeatPump::readFrame() {
         // the bounded capture window has closed, so this never becomes a sustained
         // per-frame cost. See FujiHeatPump.h for the full explanation.
         recordBootProbe_(rx_buffer_, valid_ctrl);
+
+        // Inter-frame timing instrumentation (added 14 Aug 2026) -- see FujiHeatPump.h
+        // for the full explanation. Unconditionally called; recordFrameTiming_()
+        // itself is a no-op once its own bounded capture window has closed.
+        recordFrameTiming_(valid_ctrl);
 
         last_frame_time_ = millis();
         return true;
@@ -211,6 +220,70 @@ void FujiHeatPump::maybeDumpBootCapture() {
              flagged ? "  *** CANDIDATE ***" : "");
   }
   ESP_LOGI(TAG, "=== end boot capture dump ===");
+}
+
+// --- Inter-frame timing instrumentation (added 14 Aug 2026, Phase 2 item 5) ---
+// See FujiHeatPump.h for the full explanation and protocol-review-and-next-
+// experiments.md for the background. Goal: measure the real gap between frame
+// boundaries in the live 16-byte UNIT+CTRL cycle during normal steady-state running,
+// to check the untested FRAME_REPLY_DELAY_MS=60ms guess against reality -- no power
+// cycle required, unlike the boot/discovery-probe capture above.
+
+void FujiHeatPump::recordFrameTiming_(bool is_ctrl) {
+  if (millis() > TIMING_CAPTURE_WINDOW_MS) return;  // window closed -- never a sustained cost
+
+  if (have_prev_frame_end_) {
+    // Unsigned subtraction handles micros() wraparound correctly as long as the gap
+    // itself is under ~71 minutes, which every gap here will be by many orders of
+    // magnitude.
+    uint32_t gap_us = frame_start_us_ - prev_frame_end_us_;
+    GapStats *stats = nullptr;
+    if (prev_frame_was_ctrl_ && !is_ctrl) {
+      // CTRL-end -> UNIT-start: the gap that actually matters for Phase 2 TX timing.
+      stats = &ctrl_to_unit_gap_;
+      if (ctrl_to_unit_sample_count_ < TIMING_SAMPLE_MAX) {
+        ctrl_to_unit_samples_us_[ctrl_to_unit_sample_count_++] = gap_us;
+      }
+    } else if (!prev_frame_was_ctrl_ && is_ctrl) {
+      // UNIT-end -> CTRL-start: expected ~0 (same 16-byte cycle), a sanity baseline.
+      stats = &unit_to_ctrl_gap_;
+    }
+    // (ctrl->ctrl or unit->unit shouldn't happen given the sync logic above, but if it
+    // ever does -- e.g. after a resync -- stats stays null and we simply don't record
+    // a gap for that transition, rather than mixing it into either bucket.)
+    if (stats != nullptr) {
+      stats->count++;
+      if (gap_us < stats->min_us) stats->min_us = gap_us;
+      if (gap_us > stats->max_us) stats->max_us = gap_us;
+      stats->sum_us += gap_us;
+    }
+  }
+
+  prev_frame_end_us_ = micros();
+  prev_frame_was_ctrl_ = is_ctrl;
+  have_prev_frame_end_ = true;
+}
+
+void FujiHeatPump::maybeDumpTimingCapture() {
+  if (timing_capture_dumped_) return;
+  if (millis() <= TIMING_CAPTURE_WINDOW_MS + 500) return;  // small margin past window close
+  timing_capture_dumped_ = true;
+
+  ESP_LOGI(TAG, "=== Frame timing capture dump (first %ums of running) ===",
+           (unsigned) TIMING_CAPTURE_WINDOW_MS);
+  ESP_LOGI(TAG, "  UNIT->CTRL (same-cycle baseline, expect ~0): n=%u min=%.2fms max=%.2fms avg=%.2fms",
+           unit_to_ctrl_gap_.count, unit_to_ctrl_gap_.count ? unit_to_ctrl_gap_.min_us / 1000.0f : 0.0f,
+           unit_to_ctrl_gap_.max_us / 1000.0f,
+           unit_to_ctrl_gap_.count ? (unit_to_ctrl_gap_.sum_us / (float) unit_to_ctrl_gap_.count) / 1000.0f : 0.0f);
+  ESP_LOGI(TAG, "  CTRL->UNIT (the reply-window question): n=%u min=%.2fms max=%.2fms avg=%.2fms",
+           ctrl_to_unit_gap_.count, ctrl_to_unit_gap_.count ? ctrl_to_unit_gap_.min_us / 1000.0f : 0.0f,
+           ctrl_to_unit_gap_.max_us / 1000.0f,
+           ctrl_to_unit_gap_.count ? (ctrl_to_unit_gap_.sum_us / (float) ctrl_to_unit_gap_.count) / 1000.0f : 0.0f);
+  ESP_LOGI(TAG, "  CTRL->UNIT individual samples (ms), %d captured:", (int) ctrl_to_unit_sample_count_);
+  for (size_t i = 0; i < ctrl_to_unit_sample_count_; i++) {
+    ESP_LOGI(TAG, "    [%2d] %.2fms", (int) i, ctrl_to_unit_samples_us_[i] / 1000.0f);
+  }
+  ESP_LOGI(TAG, "=== end frame timing capture dump ===");
 }
 
 void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len, bool log_details) {

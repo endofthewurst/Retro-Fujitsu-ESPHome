@@ -17,6 +17,11 @@ CONF_MYSTERY_BIT = "mystery_bit"
 # capture window, published once ~12s after boot. See FujiHeatPump.h/.cpp for the
 # capture logic and protocol-review-and-next-experiments.md for the background.
 CONF_BOOT_PROBE = "boot_probe"
+# Added 14 Aug 2026, Phase 2 item 5 -- one-shot summary of the inter-frame timing
+# capture window (UNIT->CTRL and CTRL->UNIT gap stats), published once ~15s after
+# boot. See FujiHeatPump.h/.cpp for the capture logic and
+# protocol-review-and-next-experiments.md for the background.
+CONF_FRAME_TIMING = "frame_timing"
 
 # NOTE: corrected_setpoint / corrected_room_temp moved to sensor.py (numeric) 11 Aug
 # 2026, 3B.18 -- the underlying data is always whole-degree C, so a proper numeric
@@ -49,6 +54,10 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:timer-outline",
         ),
+        cv.Optional(CONF_FRAME_TIMING): text_sensor.text_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:clock-fast",
+        ),
     }
 )
 
@@ -73,3 +82,6 @@ async def to_code(config):
     if CONF_BOOT_PROBE in config:
         sens = await text_sensor.new_text_sensor(config[CONF_BOOT_PROBE])
         cg.add(parent.set_boot_probe_text_sensor(sens))
+    if CONF_FRAME_TIMING in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_FRAME_TIMING])
+        cg.add(parent.set_frame_timing_text_sensor(sens))

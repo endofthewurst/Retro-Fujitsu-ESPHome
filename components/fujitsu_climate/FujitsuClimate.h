@@ -67,6 +67,9 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // than several numeric ones, to avoid adding five new entities for what's
   // fundamentally one exploratory diagnostic.
   void set_boot_probe_text_sensor(text_sensor::TextSensor *s) { boot_probe_text_sensor_ = s; }
+  // Inter-frame timing diagnostic (added 14 Aug 2026, Phase 2 item 5) -- see
+  // update_frame_timing_() and FujiHeatPump.h for the full explanation.
+  void set_frame_timing_text_sensor(text_sensor::TextSensor *s) { frame_timing_text_sensor_ = s; }
 
  protected:
   FujiHeatPump hp_;
@@ -85,6 +88,8 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   text_sensor::TextSensor *mystery_bit_text_sensor_{nullptr};
   text_sensor::TextSensor *boot_probe_text_sensor_{nullptr};
   bool boot_probe_published_{false};  // publish the summary once it's ready, not every tick
+  text_sensor::TextSensor *frame_timing_text_sensor_{nullptr};
+  bool frame_timing_published_{false};  // publish the summary once it's ready, not every tick
 
   // Bus-alive/status thresholds (ms) -- see update_bus_status_() for the logic.
   // Widened 2000 -> 4000ms on 11 Aug 2026 (3B.19): removing the unthrottled per-byte
@@ -117,6 +122,10 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // Publishes the boot/discovery-probe summary once the capture window has closed
   // (added 14 Aug 2026) -- see FujiHeatPump.h/.cpp for the capture logic itself.
   void update_boot_probe_();
+
+  // Publishes the inter-frame timing summary once the capture window has closed
+  // (added 14 Aug 2026) -- see FujiHeatPump.h/.cpp for the capture logic itself.
+  void update_frame_timing_();
 
   // Throttles the `State updated` log in update_climate_state() to 1/sec (added 10
   // Aug 2026) -- under real live-bus traffic this fired on every valid frame (several
