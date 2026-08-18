@@ -67,6 +67,11 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   void set_corrected_room_temp_sensor(sensor::Sensor *s) { corrected_room_temp_sensor_ = s; }
   void set_corrected_economy_text_sensor(text_sensor::TextSensor *s) { corrected_economy_text_sensor_ = s; }
   void set_mystery_bit_text_sensor(text_sensor::TextSensor *s) { mystery_bit_text_sensor_ = s; }
+  // messageDest diagnostic (added 18 Aug 2026, continued) -- see FujiHeatPump.h's
+  // getCorrMessageDest() comment. Unlike boot_probe/frame_timing, this is NOT a
+  // one-shot summary -- it updates every 1s tick, indefinitely, so it can be watched
+  // live across a real power cycle or a DIP-mode change without needing a fresh flash.
+  void set_message_dest_text_sensor(text_sensor::TextSensor *s) { message_dest_text_sensor_ = s; }
   // Boot/discovery-probe diagnostic (added 14 Aug 2026) -- see update_boot_probe_()
   // and FujiHeatPump.h for the full explanation. A single compact text_sensor rather
   // than several numeric ones, to avoid adding five new entities for what's
@@ -91,6 +96,7 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // FujiHeatPump.h's getCorrMysteryBit() comment). Kept as a diagnostic until it's
   // understood.
   text_sensor::TextSensor *mystery_bit_text_sensor_{nullptr};
+  text_sensor::TextSensor *message_dest_text_sensor_{nullptr};
   text_sensor::TextSensor *boot_probe_text_sensor_{nullptr};
   bool boot_probe_published_{false};  // publish the summary once it's ready, not every tick
   text_sensor::TextSensor *frame_timing_text_sensor_{nullptr};

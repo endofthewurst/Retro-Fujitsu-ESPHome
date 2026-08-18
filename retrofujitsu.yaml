@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.28"
+    version: "3B.29"
   on_boot:
     priority: 600
     then:
@@ -231,6 +231,9 @@ text_sensor:
     mystery_bit:
       name: "Mystery Bit"
       id: mystery_bit
+    message_dest:
+      name: "Message Dest"
+      id: message_dest
     boot_probe:
       name: "Boot Probe"
       id: boot_probe

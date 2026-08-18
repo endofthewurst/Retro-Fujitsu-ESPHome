@@ -224,6 +224,29 @@ class FujiHeatPump {
   // pattern, e.g. "most cycles have no gap but every Nth one does").
   void maybeDumpTimingCapture();
 
+  // --- messageDest diagnostic (added 18 Aug 2026, continued -- see
+  // protocol-review-and-next-experiments.md's "real mechanism, confirmed from
+  // upstream source" addendum) ---
+  // Real upstream's FujiFrame struct decodes buf[1] as: bit7 = unknownBit (always
+  // set, per upstream's own "never worked out why" note), bits[6:0] = messageDest.
+  // Applying this project's already-validated 2-byte shift (corr frame[0..5] =
+  // inverted(UNIT[2..7])), frame[1] IS that byte -- already captured on every single
+  // live processCorrectedFrame() call, just never surfaced as messageDest before now.
+  // This matters because upstream's real waitForFrame() gates ALL transmission on
+  // having just seen a real incoming frame with messageDest == SECONDARY(33) -- every
+  // TX test this project has run (3B.20-3B.28) skipped that check and sent on manual
+  // command instead. The 3B.24 Dual-mode finding (raw UNIT[3] 0x7F->0x5E, i.e. this
+  // exact byte 0x80->0xA1) already decodes to precisely this: 0xA1 & 0x7F = 0x21 = 33
+  // = SECONDARY -- suggesting Dual mode may make this condition true continuously
+  // (every ~32ms cycle), not as a rare one-shot boot-time probe as originally framed.
+  // This diagnostic exists to confirm that directly and continuously, live, before
+  // building any reply logic that depends on it.
+  uint8_t getCorrMessageDest() const { return corr_message_dest_; }
+  bool getCorrUnknownBit() const { return corr_unknown_bit_; }
+  uint32_t getMessageDestTotalCount() const { return message_dest_total_count_; }
+  uint32_t getMessageDestSecondaryCount() const { return message_dest_secondary_count_; }
+  int32_t getMessageDestFirstSecondaryMs() const { return message_dest_first_secondary_ms_; }
+
  protected:
   uart::UARTComponent *uart_{nullptr};
   bool secondary_{true};
@@ -363,6 +386,17 @@ class FujiHeatPump {
   uint8_t corr_room_temp_raw_{0};  // last decoded corrected room/controller temp, degC
   bool corr_economy_{false};       // last decoded corrected economy-mode flag
   bool corr_mystery_bit_{false};  // frame[6] bit0 -- see getCorrMysteryBit() comment above
+
+  // --- messageDest diagnostic (added 18 Aug 2026, continued) -- see the public
+  // getters above for the full explanation. corr_message_dest_ is 0xFF until the
+  // first corrected frame is decoded (mirrors the corr_mode_raw_/corr_fan_raw_
+  // "none yet" convention); thereafter it's always a real 0-127 value every cycle.
+  uint8_t corr_message_dest_{0xFF};  // frame[1] & 0x7F
+  bool corr_unknown_bit_{false};     // frame[1] bit7
+  uint32_t message_dest_total_count_{0};      // total corrected frames decoded
+  uint32_t message_dest_secondary_count_{0};  // of which messageDest == SECONDARY(33)
+  int32_t message_dest_first_secondary_ms_{-1};  // millis() of the first such sighting
+
   void feedCorrectedSync(uint8_t raw_byte);
   void processCorrectedFrame(const uint8_t *frame);
 };

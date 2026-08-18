@@ -95,7 +95,8 @@ void FujitsuClimate::update_bus_status_() {
 void FujitsuClimate::update_corrected_diagnostics_() {
   if (corrected_mode_text_sensor_ == nullptr && corrected_fan_raw_text_sensor_ == nullptr &&
       corrected_setpoint_sensor_ == nullptr && corrected_room_temp_sensor_ == nullptr &&
-      corrected_economy_text_sensor_ == nullptr && mystery_bit_text_sensor_ == nullptr) {
+      corrected_economy_text_sensor_ == nullptr && mystery_bit_text_sensor_ == nullptr &&
+      message_dest_text_sensor_ == nullptr) {
     return;  // Not configured in YAML -- nothing to do.
   }
 
@@ -177,6 +178,32 @@ void FujitsuClimate::update_corrected_diagnostics_() {
     } else {
       // Raw bit, not mapped to any label -- see FujiHeatPump.h's getCorrMysteryBit().
       mystery_bit_text_sensor_->publish_state(hp_.getCorrMysteryBit() ? "Bit=1" : "Bit=0");
+    }
+  }
+
+  // messageDest diagnostic (added 18 Aug 2026, continued) -- see FujiHeatPump.h's
+  // getCorrMessageDest() comment. Unlike boot_probe/frame_timing this updates every
+  // tick (not a one-shot), so the running SECONDARY-sighting count and first-seen
+  // timestamp can be watched live -- e.g. across a DIP-mode flip or a real power
+  // cycle -- without needing a fresh capture window or a reflash.
+  if (message_dest_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      message_dest_text_sensor_->publish_state("No Data");
+    } else {
+      uint8_t d = hp_.getCorrMessageDest();
+      const char *label;
+      switch (d) {
+        case 0: label = "START"; break;
+        case 1: label = "UNIT"; break;
+        case 32: label = "PRIMARY"; break;
+        case 33: label = "SECONDARY"; break;
+        default: label = "?"; break;
+      }
+      char buf[100];
+      snprintf(buf, sizeof(buf), "cur=%d(%s) sec=%u/%u first_sec@%dms", d, label,
+               hp_.getMessageDestSecondaryCount(), hp_.getMessageDestTotalCount(),
+               hp_.getMessageDestFirstSecondaryMs());
+      message_dest_text_sensor_->publish_state(buf);
     }
   }
 }
