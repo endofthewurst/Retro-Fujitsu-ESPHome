@@ -13,6 +13,11 @@ CONF_CORRECTED_ECONOMY = "corrected_economy"
 # confirm this bit maps to the Thermo Sensor Local/Remote setting. Kept as a
 # diagnostic until it's understood -- see FujiHeatPump.h's getCorrMysteryBit().
 CONF_MYSTERY_BIT = "mystery_bit"
+# Added 18 Aug 2026, continued -- see FujiHeatPump.h's getCorrMessageDest() comment
+# and protocol-review-and-next-experiments.md's "real mechanism" addendum. Unlike
+# boot_probe/frame_timing below, this updates continuously (not a one-shot summary),
+# so it can be watched live across a DIP-mode change or a real power cycle.
+CONF_MESSAGE_DEST = "message_dest"
 # Added 14 Aug 2026, Phase 2 item 2 -- one-shot summary of the boot/discovery-probe
 # capture window, published once ~12s after boot. See FujiHeatPump.h/.cpp for the
 # capture logic and protocol-review-and-next-experiments.md for the background.
@@ -50,6 +55,10 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:help-circle-outline",
         ),
+        cv.Optional(CONF_MESSAGE_DEST): text_sensor.text_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:account-arrow-right-outline",
+        ),
         cv.Optional(CONF_BOOT_PROBE): text_sensor.text_sensor_schema(
             entity_category="diagnostic",
             icon="mdi:timer-outline",
@@ -79,6 +88,9 @@ async def to_code(config):
     if CONF_MYSTERY_BIT in config:
         sens = await text_sensor.new_text_sensor(config[CONF_MYSTERY_BIT])
         cg.add(parent.set_mystery_bit_text_sensor(sens))
+    if CONF_MESSAGE_DEST in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_MESSAGE_DEST])
+        cg.add(parent.set_message_dest_text_sensor(sens))
     if CONF_BOOT_PROBE in config:
         sens = await text_sensor.new_text_sensor(config[CONF_BOOT_PROBE])
         cg.add(parent.set_boot_probe_text_sensor(sens))

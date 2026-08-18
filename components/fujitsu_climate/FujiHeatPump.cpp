@@ -417,8 +417,14 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
   //             Remote setting per the manual, but NOT cleanly confirmed live (11 Aug
   //             2026) -- see getCorrMysteryBit() in the header for the full story.
   //             (frame[6] >> 1)=room/controller temperature in degC.
-  // frame[0], frame[1], frame[2], frame[5], frame[7] were constant in every example seen
-  // so far (0x20, 0x80, 0x00, 0x94, 0x00) -- logged raw below in case that changes.
+  //   frame[1]  UPDATED 18 Aug 2026, continued -- previously described here only as
+  //             "constant 0x80". Per the real upstream FujiFrame struct this is
+  //             unknownBit (bit7, always set) + messageDest (bits[6:0]). Confirmed
+  //             non-constant: reads 0x80 (dest=0=START) in Normal mode, 0x80->0xA1
+  //             (dest=33=SECONDARY) once the master DIP is set to Dual -- see
+  //             getCorrMessageDest() in the header.
+  // frame[0], frame[2], frame[5], frame[7] were constant in every example seen so far
+  // (0x20, 0x00, 0x94, 0x00) -- logged raw below in case that changes.
   //
   // This 8-byte corrected frame straddles the raw 16-byte UNIT+CTRL wire cycle:
   // frame[0..5] = inverted(UNIT[2..7]), frame[6..7] = inverted(CTRL[0..1]). In other
@@ -434,6 +440,17 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
   bool corr_ctrl_present = frame[6] & 0x01;
   uint8_t corr_room_temp = frame[6] >> 1;
 
+  // messageDest diagnostic (added 18 Aug 2026, continued) -- see FujiHeatPump.h's
+  // getCorrMessageDest() comment for the full reasoning. frame[1] is the same byte
+  // previously described here only as "constant 0x80" -- per upstream's real
+  // FujiFrame struct, bit7 is unknownBit (always set) and bits[6:0] are messageDest.
+  // Tracked on every single corrected-frame decode (~30/sec), not just once at boot,
+  // specifically to check whether SECONDARY(33) shows up continuously in Dual mode
+  // (the leading hypothesis, per the 3B.24 UNIT[3] 0x7F->0x5E finding) rather than as
+  // a rare one-shot probe.
+  uint8_t corr_unknown_bit = (frame[1] >> 7) & 0x01;
+  uint8_t corr_message_dest = frame[1] & 0x7F;
+
   // Mirror into the diagnostic raw fields (unchanged since 10-11 Aug 2026).
   corr_mode_raw_ = corr_mode;
   corr_fan_raw_ = corr_fan;
@@ -442,6 +459,15 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
   corr_economy_ = corr_economy;
   corr_mystery_bit_ = corr_ctrl_present;
   corr_last_update_ms_ = millis();
+  corr_unknown_bit_ = corr_unknown_bit;
+  corr_message_dest_ = corr_message_dest;
+  message_dest_total_count_++;
+  if (corr_message_dest == 33) {  // FujiAddress::SECONDARY, per real unreality/FujiHeatPump source
+    message_dest_secondary_count_++;
+    if (message_dest_first_secondary_ms_ < 0) {
+      message_dest_first_secondary_ms_ = static_cast<int32_t>(millis());
+    }
+  }
 
   // --- Promoted to primary, 11 Aug 2026 (3B.18) ---
   // Drive the live climate entity's canonical state from the corrected decode instead
@@ -470,9 +496,11 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
     corr_last_log_ms_ = now_ms;
     ESP_LOGD(TAG,
              "CORR: pwr=%s mode=%d fan=%d err=%d econ=%d setpoint_raw=%d(0=none) "
-             "room=%dC mystery_bit=%d  raw=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+             "room=%dC mystery_bit=%d dest=%d(unk=%d) sec_count=%u/%u  "
+             "raw=[%02X %02X %02X %02X %02X %02X %02X %02X]",
              corr_power ? "ON" : "OFF", corr_mode, corr_fan, corr_error, corr_economy,
-             corr_setpoint, corr_room_temp, corr_ctrl_present,
+             corr_setpoint, corr_room_temp, corr_ctrl_present, corr_message_dest, corr_unknown_bit,
+             message_dest_secondary_count_, message_dest_total_count_,
              frame[0], frame[1], frame[2], frame[3], frame[4], frame[5], frame[6], frame[7]);
   }
 }
