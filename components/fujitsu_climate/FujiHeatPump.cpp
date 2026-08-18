@@ -461,11 +461,14 @@ void FujiHeatPump::buildFrame() {
   // controller's own frame shape, so as a secondary controller we emit that shape
   // rather than invent a new one. We start from the last real CTRL frame actually
   // captured off the bus (raw, unmodified bytes -- see last_ctrl_raw_ in readFrame())
-  // and only overwrite the two raw bytes now known, via the validated corrected
-  // decode, to carry controller state:
+  // and only overwrite specific raw bytes now known, via the validated corrected
+  // decode plus (18 Aug 2026) upstream's real address enum, to carry controller
+  // state and identity:
   //
   //   raw CTRL byte[5] ("B5")  <- power (bit0) / mode (bits[3:1]) / fan (bits[6:4])
   //   raw CTRL byte[6] ("B6")  <- setpoint degC (bits[6:0], 0=none) / economy (bit7)
+  //   raw CTRL byte[2]         <- messageSource = SECONDARY(33), new 18 Aug 2026
+  //   raw CTRL byte[3]         <- messageDest = UNIT(1), unchanged since 11 Aug 2026
   //
   // These are the SAME bytes the corrected decode reads back out of the UNIT frame
   // (UNIT[5]/UNIT[6] mirror CTRL[5]/CTRL[6] byte-for-byte -- confirmed across all 1112
@@ -474,14 +477,40 @@ void FujiHeatPump::buildFrame() {
   //
   // raw CTRL byte[3] (0x5F at rest, 0x7E in the 4 instances observed during real
   // button presses in the 29 Apr captures) is set to 0x7E to mark this as an active
-  // command frame. [hypothesis] -- upstream-comparison.md's addendum offers a
-  // competing "destination/flags byte" reading of this same byte under the
-  // corrected/shifted alignment, which this project has NOT reconciled with the
-  // original change-in-progress-flag reading yet. Using the literal value observed
-  // during real captured button presses is the most evidence-based choice available,
-  // but this whole byte is exactly the kind of thing Phase 2's bench test is meant to
-  // either confirm or falsify -- watch closely for any sign the unit reacts
-  // differently to this than expected.
+  // command frame.
+  //
+  // CORRECTED, 18 Aug 2026: fetched unreality/FujiHeatPump's actual source (the real
+  // upstream reference this whole decode is ported from) to settle this rather than
+  // keep guessing. It defines:
+  //   enum class FujiAddress : byte { START=0, UNIT=1, PRIMARY=32, SECONDARY=33 };
+  // and a single FujiFrame struct with messageSource/messageDest/unknownBit fields,
+  // decoded as: messageSource = buf[0] (whole byte, no mask); unknownBit = buf[1]
+  // bit7; messageDest = buf[1] & 0x7F (bits 0-6). Applying the same validated 2-byte
+  // shift used for the UNIT-derived frame[], by analogy, to the CTRL raw array
+  // (frame_c[0..5] = inverted(CTRL[2..7])) puts messageDest at inverted(CTRL[3]) --
+  // this raw byte's two observed values decode cleanly to real FujiAddress constants:
+  // 0x5F -> 0xA0 = unknownBit(0x80) | UNIT... no: 0xA0 & 0x7F = 0x20 = 32 = PRIMARY;
+  // 0x7E -> 0x81, 0x81 & 0x7F = 0x01 = UNIT. So byte[3] is messageDest, not a generic
+  // flag: 0x5F = addressed to nobody-in-particular/PRIMARY(idle default), 0x7E =
+  // addressed to UNIT(1) -- i.e. "this is a real command, for the indoor unit"
+  // specifically. That's a real resolution of the old "destination/flags byte of the
+  // indoor unit's frame" (upstream-comparison.md) vs "change-in-progress flag"
+  // (original PROTOCOL.md) disagreement: both were half right. 0x7E is correct here
+  // and needs no change.
+  //
+  // What DOES need a change: messageSOURCE. By the same shift analogy, messageSource
+  // for a CTRL-slot frame is inverted(CTRL[2]) -- CTRL[2] has read fixed 0xFF (source
+  // = inverted 0x00 = START) in every real frame ever captured. START is a real, named
+  // upstream constant (0), not "no data" -- but it is very unlikely to be the right
+  // self-declaration for OUR frame. Cloning the master's frame verbatim (the previous
+  // behaviour) meant our transmitted frame declared messageSource=START, same as every
+  // real CTRL frame -- never SECONDARY(33), the actual identity upstream defines for a
+  // second controller. Address "1" (this project's and upstream-comparison.md's
+  // earlier working guess for what a secondary should declare) was wrong: per the real
+  // enum, 1 = UNIT, i.e. the indoor unit's own address -- declaring that would have
+  // made this frame claim to BE the indoor unit, not introduce itself as a second
+  // controller. The corrected, single-variable test: raw CTRL byte[2] <- SECONDARY(33)
+  // inverted = 0x21 ^ 0xFF = 0xDE. Nothing else changes in this round.
   //
   // Byte[0] (room/controller temperature + mystery bit) is left untouched -- copied
   // straight from the last real CTRL frame -- since the ESP32 has no temperature
@@ -520,9 +549,16 @@ void FujiHeatPump::buildFrame() {
   uint8_t logical_b6 = (setpoint_raw & 0x7F) | (economy_bit ? 0x80 : 0x00);
   tx_buffer_[6] = static_cast<uint8_t>(logical_b6 ^ 0xFF);
 
-  // raw byte[3]: 0x7E marks an active command frame. [hypothesis] -- see the comment
-  // above buildFrame().
+  // raw byte[3]: 0x7E marks messageDest=UNIT(1) -- "this command is for the indoor
+  // unit" -- see the comment above buildFrame(). Confirmed correct against the real
+  // upstream FujiAddress enum, no change needed.
   tx_buffer_[3] = 0x7E;
+
+  // raw byte[2]: messageSource. NEW, 18 Aug 2026 -- the actual address experiment.
+  // Declares this frame as coming from SECONDARY(33) rather than the cloned master's
+  // implicit START(0), per the corrected byte-mapping in the comment above. Single
+  // variable change from every prior Phase 2 TX test.
+  tx_buffer_[2] = 0xDE;
 
   has_pending_frame_ = true;
 
