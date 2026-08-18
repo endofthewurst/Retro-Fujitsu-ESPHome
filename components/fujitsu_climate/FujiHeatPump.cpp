@@ -601,9 +601,23 @@ void FujiHeatPump::buildFrame() {
 
   has_pending_frame_ = true;
 
-  ESP_LOGW(TAG, "buildFrame(): built CTRL command frame (Phase 2, still unvalidated against real hardware):");
-  for (int i = 0; i < FRAME_LENGTH; i++) {
-    ESP_LOGW(TAG, "  [%d] = 0x%02X (was 0x%02X)", i, tx_buffer_[i], last_ctrl_raw_[i]);
+  // CHANGED 18 Aug 2026 (3B.28) -- collapsed from a per-byte 9-line ESP_LOGW loop to a
+  // single formatted line. See sendPendingFrame()'s comment for why: three consecutive
+  // 3B.27 handshake-burst tests each coincided almost exactly with a live-log-client
+  // connection drop (WinError 64), and this synchronous per-byte logging -- called
+  // directly inside readFrame()'s valid_ctrl branch, the same timing-critical path
+  // 3B.25 built to hit the measured CTRL->UNIT gap -- is the leading suspect. One
+  // ESP_LOGW call instead of nine cuts the per-invocation logging cost roughly 9x with
+  // no loss of the actual diagnostic content.
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildFrame(): built CTRL command frame: %s (was: %02X %02X %02X %02X %02X %02X %02X %02X)",
+             hex_buf, last_ctrl_raw_[0], last_ctrl_raw_[1], last_ctrl_raw_[2], last_ctrl_raw_[3],
+             last_ctrl_raw_[4], last_ctrl_raw_[5], last_ctrl_raw_[6], last_ctrl_raw_[7]);
   }
 }
 
@@ -626,9 +640,18 @@ void FujiHeatPump::buildLoginFrame() {
   tx_buffer_[4] = 0xDF;  // messageType = LOGIN(2), inverted
   has_pending_frame_ = true;
 
-  ESP_LOGW(TAG, "buildLoginFrame(): built LOGIN announce frame (burst_remaining=%d):", (int) login_burst_remaining_);
-  for (int i = 0; i < FRAME_LENGTH; i++) {
-    ESP_LOGW(TAG, "  [%d] = 0x%02X (was 0x%02X)", i, tx_buffer_[i], last_ctrl_raw_[i]);
+  // CHANGED 18 Aug 2026 (3B.28) -- see buildFrame()'s matching comment: collapsed to a
+  // single log line. This one matters most of the three, since a 3-frame burst calls
+  // this up to 3 times within a handful of bus cycles -- the tightest concentration of
+  // logging calls in the whole 3B.27 feature.
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildLoginFrame(): built LOGIN frame (burst_remaining=%d): %s",
+             (int) login_burst_remaining_, hex_buf);
   }
 }
 
@@ -691,9 +714,27 @@ bool FujiHeatPump::sendPendingFrame() {
   // Logged at WARN (not gated behind debug_) -- Phase 2 testing is rare and
   // deliberate, and knowing exactly what was sent is essential for correlating
   // against what happens at the physical wall unit immediately afterward.
-  ESP_LOGW(TAG, "Sent TX frame (Phase 2 test, unvalidated against real hardware):");
-  for (int i = 0; i < FRAME_LENGTH; i++) {
-    ESP_LOGW(TAG, "  TX[%d] = 0x%02X", i, tx_buffer_[i]);
+  //
+  // CHANGED 18 Aug 2026 (3B.28) -- collapsed from a per-byte 9-line ESP_LOGW loop to a
+  // single formatted line. Root-cause note: three consecutive 3B.27 login-handshake
+  // test attempts each coincided almost exactly (WinError 64, live-log client dropped)
+  // with the moment this burst of logging + echo-suppression ran -- 0/3 clean captures
+  // despite the physical unit itself showing no lasting disruption each time (HA state
+  // recovered to Bus OK / normal readings within ~15-30s). This function runs
+  // synchronously inside readFrame()'s valid_ctrl branch -- the exact timing-critical
+  // path 3B.25 built to hit the measured (0-10.9ms) CTRL->UNIT gap -- and during a
+  // 3-frame burst it (and buildLoginFrame()) fire up to 3 times within a handful of
+  // bus cycles, each previously costing 9 separate ESP_LOGW calls. That's the leading
+  // suspect for stalling loop() long enough to disrupt the WiFi/TCP stack -- not the
+  // bus/hardware itself. Cutting to 1 line per call is a cheap, safe first mitigation
+  // to test before concluding anything about the handshake's actual bus effect.
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "Sent TX frame: %s", hex_buf);
   }
 
   has_pending_frame_ = false;
