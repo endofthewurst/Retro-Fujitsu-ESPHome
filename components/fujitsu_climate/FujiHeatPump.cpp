@@ -130,6 +130,17 @@ bool FujiHeatPump::readFrame() {
           // to trigger the actual send at the right moment.
           if (has_pending_frame_) {
             sendPendingFrame();
+
+            // NEW 18 Aug 2026 (3B.27): login-handshake burst re-arm. sendPendingFrame()
+            // just cleared has_pending_frame_ after sending; if a burst is still in
+            // progress, decrement and rebuild for the next CTRL->UNIT gap so the burst
+            // lands one frame per bus cycle rather than all at once.
+            if (login_burst_remaining_ > 0) {
+              login_burst_remaining_--;
+              if (login_burst_remaining_ > 0) {
+                buildLoginFrame();
+              }
+            }
           }
         }
 
@@ -594,6 +605,38 @@ void FujiHeatPump::buildFrame() {
   for (int i = 0; i < FRAME_LENGTH; i++) {
     ESP_LOGW(TAG, "  [%d] = 0x%02X (was 0x%02X)", i, tx_buffer_[i], last_ctrl_raw_[i]);
   }
+}
+
+void FujiHeatPump::buildLoginFrame() {
+  // Added 18 Aug 2026 (3B.27) -- see armLoginHandshake()'s header comment. Unlike
+  // buildFrame(), this does NOT touch the state payload (raw bytes [5]/[6]) at all --
+  // it's a pure "here I am" announcement, mirroring whatever the real controller's
+  // last frame said, with only identity/type fields changed. Rationale: a login
+  // handshake shouldn't plausibly carry a command; bundling one in was never tested
+  // as a separate variable and might itself be why 3B.26's single LOGIN attempt did
+  // nothing (or might not matter at all -- this at least removes it as a variable).
+  if (!have_last_ctrl_raw_) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildLoginFrame(): no CTRL frame captured from the bus yet, refusing");
+    return;
+  }
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+  tx_buffer_[2] = 0xDE;  // messageSource = SECONDARY(33), inverted
+  tx_buffer_[3] = 0x7E;  // messageDest = UNIT(1), inverted
+  tx_buffer_[4] = 0xDF;  // messageType = LOGIN(2), inverted
+  has_pending_frame_ = true;
+
+  ESP_LOGW(TAG, "buildLoginFrame(): built LOGIN announce frame (burst_remaining=%d):", (int) login_burst_remaining_);
+  for (int i = 0; i < FRAME_LENGTH; i++) {
+    ESP_LOGW(TAG, "  [%d] = 0x%02X (was 0x%02X)", i, tx_buffer_[i], last_ctrl_raw_[i]);
+  }
+}
+
+void FujiHeatPump::armLoginHandshake(int count) {
+  if (count < 1) count = 1;
+  login_burst_remaining_ = count;
+  buildLoginFrame();
+  ESP_LOGW(TAG, "armLoginHandshake(): arming %d LOGIN frame(s), one per CTRL->UNIT gap starting now", count);
 }
 
 bool FujiHeatPump::sendPendingFrame() {

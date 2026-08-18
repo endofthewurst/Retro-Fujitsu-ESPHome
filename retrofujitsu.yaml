@@ -287,6 +287,18 @@ button:
       - lambda: |-
           id(fujitsu_hp)->test_setpoint_step(-1);
 
+  # Login handshake test (added 18 Aug 2026, 3B.27) -- sends a burst of 3 pure
+  # LOGIN-type frames (no command payload), one per bus cycle. See
+  # protocol-review-and-next-experiments.md for why.
+  - platform: template
+    name: "TX Test: Login Handshake"
+    id: tx_test_login_handshake
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_login_handshake();
+
 # Diagnostic interval
 interval:
   - interval: 300s
