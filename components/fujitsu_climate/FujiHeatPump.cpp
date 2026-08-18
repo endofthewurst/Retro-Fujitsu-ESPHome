@@ -119,6 +119,18 @@ bool FujiHeatPump::readFrame() {
           // the earliest point it's safe to build an outgoing frame at all.
           memcpy(last_ctrl_raw_, rx_buffer_, FRAME_LENGTH);
           have_last_ctrl_raw_ = true;
+
+          // NEW 18 Aug 2026 (3B.25): if a frame is armed (buildFrame() already called,
+          // e.g. from test_setpoint_step()), send it right here -- immediately after a
+          // real CTRL frame ends, at the start of the measured CTRL->UNIT gap -- rather
+          // than waiting for a separate, unsynchronized call from outside readFrame().
+          // See sendPendingFrame()'s own comment for the full reasoning. This does mean
+          // a test button press doesn't transmit instantly; it arms has_pending_frame_
+          // and waits (at most one bus cycle, sub-second) for the next real CTRL frame
+          // to trigger the actual send at the right moment.
+          if (has_pending_frame_) {
+            sendPendingFrame();
+          }
         }
 
         // Boot/discovery-probe instrumentation (added 14 Aug 2026) -- runs on every
@@ -573,11 +585,24 @@ bool FujiHeatPump::sendPendingFrame() {
     return false;
   }
 
-  // Wait appropriate delay after last received frame
-  uint32_t elapsed = millis() - last_frame_time_;
-  if (elapsed < FRAME_REPLY_DELAY_MS) {
-    delay(FRAME_REPLY_DELAY_MS - elapsed);
-  }
+  // CHANGED 18 Aug 2026 (3B.25): dropped the old "pad up to FRAME_REPLY_DELAY_MS
+  // (60ms) since last_frame_time_, then send" logic. 3B.23's timing capture measured
+  // the real CTRL->UNIT gap at 0.0ms in Normal mode and up to only ~10.9ms in Dual
+  // mode -- 60ms was never going to land inside either. Worse, this function used to
+  // be called directly from test_setpoint_step(), synchronously, at whatever random
+  // point in the bus cycle the HA button happened to be pressed -- the delay() padding
+  // gave the illusion of "timed", but really just blocked execution (and stopped
+  // readFrame() from processing incoming bytes) for up to 60ms before blindly
+  // transmitting, with no relationship to where we actually were in the cycle. That's
+  // consistent with every collision-artifact result seen in every TX test to date,
+  // Normal and Dual mode alike, address-modified or not.
+  //
+  // sendPendingFrame() is now called from exactly one place: readFrame(), immediately
+  // after it finishes processing a real CTRL frame (see the valid_ctrl branch below).
+  // That positions transmission at the START of the CTRL->UNIT gap this project has
+  // actually measured -- the best-grounded timing available, rather than a borrowed
+  // constant that was never verified against this bus's real cycle. No added delay
+  // here; the whole point is to send as soon as possible after the CTRL frame ends.
 
   // Send the frame
   uart_->write_array(tx_buffer_, FRAME_LENGTH);
