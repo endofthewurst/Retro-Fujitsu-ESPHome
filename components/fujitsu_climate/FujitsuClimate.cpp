@@ -383,6 +383,23 @@ void FujitsuClimate::test_login_handshake() {
   hp_.armLoginHandshake(3);
 }
 
+void FujitsuClimate::test_login_ack() {
+  // Added 18 Aug 2026, continued (3B.29) -- see FujiHeatPump.h's armLoginAckTest()
+  // for the full reasoning. First TX test in this project gated on actually being
+  // addressed rather than firing on this button press directly.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_login_ack: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_login_ack: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  ESP_LOGW(TAG, "TX TEST: arming address-gated LOGIN-ack -- watch sensor.house_aircon_mystery_bit "
+                "and the wall unit; will fire on the next messageDest==SECONDARY frame observed");
+  hp_.armLoginAckTest();
+}
+
 void FujitsuClimate::update_climate_state() {
   if (!hardware_present_) {
     // Keep defaults

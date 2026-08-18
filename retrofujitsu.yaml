@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.29"
+    version: "3B.30"
   on_boot:
     priority: 600
     then:
@@ -301,6 +301,19 @@ button:
     on_press:
       - lambda: |-
           id(fujitsu_hp)->test_login_handshake();
+
+  # Address-gated LOGIN-ack test (added 18 Aug 2026, continued, 3B.29) -- see
+  # protocol-review-and-next-experiments.md's "real mechanism" addendum. Arms a
+  # one-shot reply that fires on the next observed messageDest==SECONDARY frame,
+  # instead of sending on this button press directly.
+  - platform: template
+    name: "TX Test: Login Ack (address-gated)"
+    id: tx_test_login_ack
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_login_ack();
 
 # Diagnostic interval
 interval:

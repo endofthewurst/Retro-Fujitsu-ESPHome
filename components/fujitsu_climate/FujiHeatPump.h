@@ -247,6 +247,22 @@ class FujiHeatPump {
   uint32_t getMessageDestSecondaryCount() const { return message_dest_secondary_count_; }
   int32_t getMessageDestFirstSecondaryMs() const { return message_dest_first_secondary_ms_; }
 
+  // --- Address-gated LOGIN-ack test (added 18 Aug 2026, continued -- see
+  // protocol-review-and-next-experiments.md's "real mechanism" addendum) ---
+  // Every TX test to date (3B.20-3B.28) built and sent a frame on manual command,
+  // never checking whether the indoor unit had actually addressed a frame to us
+  // first. Per real upstream source, that check is the entire mechanism: reply only
+  // when messageDest == SECONDARY(33) has just been observed, and the first such
+  // reply must be a LOGIN-acknowledgment (mirrors currentState, writeBit=0), not a
+  // command. armLoginAckTest() arms a one-shot flag; the next corrected-frame decode
+  // that reads messageDest==SECONDARY (per the diagnostic above, this reads 100% of
+  // frames in Dual mode, so in practice within ~1 cycle) builds exactly one
+  // LOGIN-ack frame via buildLoginAckFrame() and disarms. The actual send still goes
+  // through the existing, proven 3B.25 collision-free path (readFrame() sends
+  // immediately after the real CTRL frame ends) -- this only changes what triggers
+  // the arm, not how the send itself is timed.
+  void armLoginAckTest();
+
  protected:
   uart::UARTComponent *uart_{nullptr};
   bool secondary_{true};
@@ -344,6 +360,17 @@ class FujiHeatPump {
   // armLoginHandshake() above.
   void buildLoginFrame();
   int32_t login_burst_remaining_{0};
+
+  // Address-gated LOGIN-ack test (added 18 Aug 2026, continued) -- see
+  // armLoginAckTest() above for the full reasoning. Unlike buildLoginFrame() (dest=
+  // UNIT(1), the "announce myself to the unit" guess every prior LOGIN test used),
+  // this builds the reply upstream's real source actually specifies for a LOGIN-type
+  // frame addressed to us: dest=SECONDARY(33) (mirrors back into the same slot we
+  // were addressed in) and controllerPresent forced to 1, everything else (on/off,
+  // mode, fan, setpoint, economy, room temp) mirrored unchanged from the last real
+  // frame -- a true "yes, I'm here" acknowledgment, not a command.
+  void buildLoginAckFrame();
+  bool login_ack_test_armed_{false};
 
   // Timing
   uint32_t last_frame_time_{0};
