@@ -467,6 +467,18 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
     if (message_dest_first_secondary_ms_ < 0) {
       message_dest_first_secondary_ms_ = static_cast<int32_t>(millis());
     }
+
+    // Address-gated LOGIN-ack test (added 18 Aug 2026, continued) -- see
+    // armLoginAckTest()'s header comment for the full reasoning. This is the first
+    // TX trigger in this project's history gated on actually having just been
+    // addressed, rather than fired on manual command alone. Only builds -- the
+    // existing, proven 3B.25 send path (readFrame(), right after the real CTRL frame
+    // ends) still does the actual transmit, at the same measured-safe timing every
+    // other TX test has used.
+    if (login_ack_test_armed_) {
+      login_ack_test_armed_ = false;
+      buildLoginAckFrame();
+    }
   }
 
   // --- Promoted to primary, 11 Aug 2026 (3B.18) ---
@@ -688,6 +700,74 @@ void FujiHeatPump::armLoginHandshake(int count) {
   login_burst_remaining_ = count;
   buildLoginFrame();
   ESP_LOGW(TAG, "armLoginHandshake(): arming %d LOGIN frame(s), one per CTRL->UNIT gap starting now", count);
+}
+
+void FujiHeatPump::buildLoginAckFrame() {
+  // Added 18 Aug 2026, continued -- see armLoginAckTest()'s header comment and
+  // protocol-review-and-next-experiments.md's "real mechanism" addendum for the full
+  // reasoning. This is upstream's actual LOGIN-reply shape, quoted from real source:
+  //   ff.messageSource     = controllerAddress;       // SECONDARY(33), same as always
+  //   ff.messageDest       = FujiAddress::SECONDARY;  // NEW -- every prior LOGIN test
+  //                                                    // (3B.26-28) used UNIT(1) here
+  //   ff.loginBit          = true;
+  //   ff.controllerPresent = 1;                       // NEW -- force this bit on
+  //   ff.unknownBit        = true;
+  //   ff.writeBit          = 0;                        // not a command
+  //   ff.onOff/.temperature/.acMode/.fanMode/... = currentState.*  // mirror, don't invent
+  //
+  // Mirroring is achieved the same way buildFrame()/buildLoginFrame() already do it:
+  // start from the last real CTRL frame captured off the bus (on/off, mode, fan,
+  // setpoint, economy, room temp all come along unchanged), then only touch the
+  // specific bytes this reply actually needs to declare.
+  if (!have_last_ctrl_raw_) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildLoginAckFrame(): no CTRL frame captured from the bus yet, refusing");
+    return;
+  }
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+
+  // raw byte[2]: messageSource = SECONDARY(33), inverted -- unchanged from every
+  // addressed test since 3B.24.
+  tx_buffer_[2] = 0xDE;
+
+  // raw byte[3]: messageDest = SECONDARY(33) + unknownBit, inverted. Logical value
+  // 0x80 (unknownBit) | 0x21 (dest=33) = 0xA1, inverted for the wire = 0x5E. THIS is
+  // the new variable this test exists to try: every prior LOGIN attempt used 0x7E
+  // (dest=UNIT(1), "announce myself to the indoor unit"), which was never what
+  // upstream's real LOGIN-ack reply actually declares.
+  tx_buffer_[3] = 0x5E;
+
+  // raw byte[4]: messageType = LOGIN(2), inverted -- same value buildLoginFrame()
+  // already uses (0xDF). writeBit=0 is implicit: no other bits in this byte have
+  // ever been observed set in any real captured frame, so leaving them at their
+  // established rest value keeps writeBit (wherever exactly it lives in this byte)
+  // at 0, matching "this is not a command."
+  tx_buffer_[4] = 0xDF;
+
+  // raw byte[0]: controllerPresent (frame[6] bit0, via frame[6]=inverted(CTRL[0])).
+  // Force bit0 of the LOGICAL byte to 1, preserving whatever room/controller
+  // temperature is already mirrored in the upper 7 bits from the cloned template --
+  // "controllerPresent=1, everything else mirrored" per upstream's snippet above.
+  uint8_t logical_b0 = static_cast<uint8_t>(last_ctrl_raw_[0] ^ 0xFF);
+  logical_b0 |= 0x01;
+  tx_buffer_[0] = static_cast<uint8_t>(logical_b0 ^ 0xFF);
+
+  has_pending_frame_ = true;
+
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildLoginAckFrame(): built LOGIN-ack (dest=SECONDARY, controllerPresent=1): %s", hex_buf);
+  }
+}
+
+void FujiHeatPump::armLoginAckTest() {
+  login_ack_test_armed_ = true;
+  ESP_LOGW(TAG, "armLoginAckTest(): armed -- will send exactly one LOGIN-ack on the next observed "
+                "messageDest==SECONDARY frame (per the diagnostic, expect this within ~1 bus cycle in Dual mode)");
 }
 
 bool FujiHeatPump::sendPendingFrame() {

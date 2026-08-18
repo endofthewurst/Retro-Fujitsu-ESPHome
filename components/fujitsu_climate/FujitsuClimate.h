@@ -57,6 +57,14 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // LOGIN-type announcement frames (no command payload), one per bus cycle.
   void test_login_handshake();
 
+  // Address-gated LOGIN-ack test (added 18 Aug 2026, continued, 3B.29) -- see
+  // FujiHeatPump.h's armLoginAckTest() for the full reasoning. Unlike every prior TX
+  // test, this doesn't send on this button press directly -- it arms a flag that
+  // fires exactly once, the next time the bus is observed addressing us
+  // (messageDest==SECONDARY), which per the new message_dest diagnostic is expected
+  // within about one bus cycle in the board's current (Dual) DIP mode.
+  void test_login_ack();
+
   // Bus health diagnostics (added 10 Aug 2026) -- optional, set only if configured
   // in YAML via the fujitsu_climate binary_sensor/text_sensor/sensor platforms.
   void set_bus_alive_binary_sensor(binary_sensor::BinarySensor *s) { bus_alive_binary_sensor_ = s; }
