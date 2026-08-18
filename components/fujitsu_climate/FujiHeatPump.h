@@ -263,6 +263,16 @@ class FujiHeatPump {
   // the arm, not how the send itself is timed.
   void armLoginAckTest();
 
+  // --- Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) ---
+  // Per upstream's real source: "Only later, once addressed again with a STATUS-type
+  // frame, does a real field change get sent." The LOGIN-ack test above is the
+  // handshake reply; this is the actual command, gated the same way (arms on the
+  // next observed messageDest==SECONDARY frame) but building a STATUS-type frame
+  // (messageType left at its natural cloned value, not forced to LOGIN) with the
+  // setpoint changed by delta_c and dest=SECONDARY (not UNIT(1), which every prior
+  // command test 3B.20-3B.26 used).
+  void armStatusCommandTest(int delta_c);
+
  protected:
   uart::UARTComponent *uart_{nullptr};
   bool secondary_{true};
@@ -371,6 +381,12 @@ class FujiHeatPump {
   // frame -- a true "yes, I'm here" acknowledgment, not a command.
   void buildLoginAckFrame();
   bool login_ack_test_armed_{false};
+
+  // Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) -- see
+  // armStatusCommandTest() above.
+  void buildStatusCommandFrame(int delta_c);
+  bool status_command_test_armed_{false};
+  int status_command_delta_c_{0};
 
   // Timing
   uint32_t last_frame_time_{0};

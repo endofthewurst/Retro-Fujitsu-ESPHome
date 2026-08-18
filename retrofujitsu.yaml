@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.30"
+    version: "3B.31"
   on_boot:
     priority: 600
     then:
@@ -314,6 +314,19 @@ button:
     on_press:
       - lambda: |-
           id(fujitsu_hp)->test_login_ack();
+
+  # Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) -- the
+  # actual TX test: a real setpoint change, gated on being addressed, using
+  # dest=SECONDARY per the 3B.30 LOGIN-ack result. See
+  # protocol-review-and-next-experiments.md for the full reasoning.
+  - platform: template
+    name: "TX Test: Setpoint +1 (address-gated)"
+    id: tx_test_setpoint_gated
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_status_command(1);
 
 # Diagnostic interval
 interval:

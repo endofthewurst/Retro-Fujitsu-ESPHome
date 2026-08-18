@@ -479,6 +479,14 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
       login_ack_test_armed_ = false;
       buildLoginAckFrame();
     }
+
+    // Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) -- see
+    // armStatusCommandTest()'s header comment. Same gating, different content: a
+    // real field-changing command instead of a handshake acknowledgment.
+    if (status_command_test_armed_) {
+      status_command_test_armed_ = false;
+      buildStatusCommandFrame(status_command_delta_c_);
+    }
   }
 
   // --- Promoted to primary, 11 Aug 2026 (3B.18) ---
@@ -768,6 +776,76 @@ void FujiHeatPump::armLoginAckTest() {
   login_ack_test_armed_ = true;
   ESP_LOGW(TAG, "armLoginAckTest(): armed -- will send exactly one LOGIN-ack on the next observed "
                 "messageDest==SECONDARY frame (per the diagnostic, expect this within ~1 bus cycle in Dual mode)");
+}
+
+void FujiHeatPump::buildStatusCommandFrame(int delta_c) {
+  // Added 18 Aug 2026, continued (3B.31) -- see armStatusCommandTest()'s header
+  // comment. This is the actual command, sent only in reply to being addressed --
+  // every prior command test (3B.20-3B.26) sent unprompted, on manual command alone.
+  if (!have_last_ctrl_raw_) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildStatusCommandFrame(): no CTRL frame captured from the bus yet, refusing");
+    return;
+  }
+  if (std::isnan(temperature_)) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildStatusCommandFrame(): no current setpoint decoded (mode may not support one), refusing");
+    return;
+  }
+  float target = temperature_ + static_cast<float>(delta_c);
+  if (target < 16.0f) target = 16.0f;
+  if (target > 30.0f) target = 30.0f;
+
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+
+  // raw byte[2]: messageSource = SECONDARY(33), inverted -- unchanged from every
+  // addressed test since 3B.24.
+  tx_buffer_[2] = 0xDE;
+
+  // raw byte[3]: messageDest = SECONDARY(33) + unknownBit, inverted (0x5E). NEW for a
+  // command frame -- every prior command test (3B.20-3B.26) declared dest=UNIT(1)
+  // (0x7E), on the assumption a command is "addressed to the indoor unit." The
+  // messageDest diagnostic (3B.29) and the LOGIN-ack test (3B.30) both confirm this
+  // controller is only ever addressed via dest=SECONDARY -- so its own replies,
+  // including a real content-changing command, use that same slot/addressing
+  // convention rather than the old UNIT(1) guess.
+  tx_buffer_[3] = 0x5E;
+
+  // raw byte[4]: messageType. Deliberately left UNTOUCHED here -- cloned from the
+  // real template, which reads 0xFF (logical 0x00 = STATUS) in every captured frame.
+  // This reverts 3B.26's messageType=LOGIN experiment for this specific test: per
+  // upstream's real source, LOGIN is for the handshake reply only (see
+  // buildLoginAckFrame() above); a real field-changing command is STATUS-type with
+  // writeBit=1. The exact bit position of writeBit within this byte isn't
+  // independently confirmed, so it's left at whatever the real controller's own
+  // STATUS frames already carry rather than guessed at.
+
+  // raw byte[6]: setpoint (bits[6:0]) + economy (bit7) -- same encoding buildFrame()
+  // already uses, preserving economy from the real last frame.
+  uint8_t setpoint_raw = static_cast<uint8_t>(target);
+  uint8_t last_logical_b6 = static_cast<uint8_t>(last_ctrl_raw_[6] ^ 0xFF);
+  bool economy_bit = (last_logical_b6 & 0x80) != 0;
+  uint8_t logical_b6 = (setpoint_raw & 0x7F) | (economy_bit ? 0x80 : 0x00);
+  tx_buffer_[6] = static_cast<uint8_t>(logical_b6 ^ 0xFF);
+
+  has_pending_frame_ = true;
+
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildStatusCommandFrame(): built STATUS command (dest=SECONDARY, setpoint %.0f->%.0fdegC): %s",
+             temperature_, target, hex_buf);
+  }
+}
+
+void FujiHeatPump::armStatusCommandTest(int delta_c) {
+  status_command_delta_c_ = delta_c;
+  status_command_test_armed_ = true;
+  ESP_LOGW(TAG, "armStatusCommandTest(): armed (delta=%d) -- will send exactly one STATUS command on the next "
+                "observed messageDest==SECONDARY frame", delta_c);
 }
 
 bool FujiHeatPump::sendPendingFrame() {

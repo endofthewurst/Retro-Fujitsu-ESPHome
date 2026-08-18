@@ -65,6 +65,14 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // within about one bus cycle in the board's current (Dual) DIP mode.
   void test_login_ack();
 
+  // Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) -- see
+  // FujiHeatPump.h's armStatusCommandTest() for the full reasoning. The actual TX
+  // test: arms a real setpoint-changing command that fires only on the next observed
+  // messageDest==SECONDARY frame, using the corrected dest=SECONDARY addressing the
+  // LOGIN-ack test (3B.30) established, instead of every prior command test's
+  // dest=UNIT(1) guess.
+  void test_status_command(int delta_c);
+
   // Bus health diagnostics (added 10 Aug 2026) -- optional, set only if configured
   // in YAML via the fujitsu_climate binary_sensor/text_sensor/sensor platforms.
   void set_bus_alive_binary_sensor(binary_sensor::BinarySensor *s) { bus_alive_binary_sensor_ = s; }

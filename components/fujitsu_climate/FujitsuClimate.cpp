@@ -400,6 +400,23 @@ void FujitsuClimate::test_login_ack() {
   hp_.armLoginAckTest();
 }
 
+void FujitsuClimate::test_status_command(int delta_c) {
+  // Added 18 Aug 2026, continued (3B.31) -- see FujiHeatPump.h's
+  // armStatusCommandTest() for the full reasoning. The actual command test, gated on
+  // being addressed, using the corrected dest=SECONDARY addressing.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_status_command: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_status_command: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  ESP_LOGW(TAG, "TX TEST: arming address-gated STATUS command (delta=%d) -- check the wall unit now, "
+                "will fire on the next messageDest==SECONDARY frame observed", delta_c);
+  hp_.armStatusCommandTest(delta_c);
+}
+
 void FujitsuClimate::update_climate_state() {
   if (!hardware_present_) {
     // Keep defaults
