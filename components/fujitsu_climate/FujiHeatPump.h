@@ -306,6 +306,10 @@ class FujiHeatPump {
   uint32_t last_frame_time_{0};
   uint32_t last_any_byte_time_{0};  // set on every raw byte, regardless of validity (added 10 Aug 2026)
   uint32_t debug_log_last_ms_{0};  // throttles the per-frame debug/info dumps to 1/sec (added 10 Aug 2026)
+  // No longer used as of 3B.25 (18 Aug 2026) -- sendPendingFrame() is now triggered
+  // directly from readFrame() right after a real CTRL frame, timed to the measured
+  // CTRL->UNIT gap instead of this fixed post-hoc delay. Left declared for the
+  // history/reasoning trail in the comments referencing it.
   static const uint32_t FRAME_REPLY_DELAY_MS = 60;  // Reply 50-60ms after receiving
 
   // --- Corrected decode (added 10 Aug 2026, Session A; promoted to primary 11 Aug

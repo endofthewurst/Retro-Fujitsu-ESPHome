@@ -327,8 +327,15 @@ void FujitsuClimate::test_setpoint_step(int delta_c) {
   ESP_LOGW(TAG, "TX TEST: requesting setpoint %.0f -> %.0fdegC (Phase 2, unvalidated -- check the wall unit now)",
            current, target);
   hp_.setTemperature(target);
+  // CHANGED 18 Aug 2026 (3B.25): no longer sends here directly. The frame is now armed
+  // (has_pending_frame_ set by buildFrame(), called inside setTemperature()) and
+  // FujiHeatPump::readFrame() sends it itself, immediately after the next real CTRL
+  // frame -- timed to the actual measured CTRL->UNIT gap instead of an unsynchronized
+  // fixed delay from this button-press moment. See sendPendingFrame()'s comment for
+  // the full reasoning. Expect the TX log lines to appear up to one bus cycle
+  // (sub-second) after this log line, not instantly.
   if (hp_.hasPendingFrame()) {
-    hp_.sendPendingFrame();
+    ESP_LOGW(TAG, "test_setpoint_step: frame armed, will send at the start of the next CTRL->UNIT gap");
   } else {
     ESP_LOGW(TAG, "test_setpoint_step: buildFrame() did not produce a pending frame (see its own log for why)");
   }
