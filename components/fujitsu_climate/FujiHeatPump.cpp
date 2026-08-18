@@ -566,11 +566,27 @@ void FujiHeatPump::buildFrame() {
   // upstream FujiAddress enum, no change needed.
   tx_buffer_[3] = 0x7E;
 
-  // raw byte[2]: messageSource. NEW, 18 Aug 2026 -- the actual address experiment.
-  // Declares this frame as coming from SECONDARY(33) rather than the cloned master's
-  // implicit START(0), per the corrected byte-mapping in the comment above. Single
-  // variable change from every prior Phase 2 TX test.
+  // raw byte[2]: messageSource. Declares this frame as coming from SECONDARY(33)
+  // rather than the cloned master's implicit START(0), per the corrected byte-mapping
+  // in the comment above. Confirmed safe to transmit (3B.24/3B.25): produces no bus
+  // disruption once send timing is correct (3B.25) -- the earlier `E:EE` (3B.24) only
+  // showed up with the old, unsynchronized fixed-delay send, not from this byte alone.
   tx_buffer_[2] = 0xDE;
+
+  // raw byte[4]: messageType. NEW, 18 Aug 2026 (3B.26) -- next single-variable test,
+  // now that 3B.25 removes the timing confound. Per the real upstream source, byte[2]
+  // of the FujiFrame struct (== raw CTRL[4] via the same shift) carries messageType in
+  // bits[5:4]: 0=STATUS, 1=ERROR, 2=LOGIN, 3=unexplored (register-type field, also
+  // documented in upstream-comparison.md). CTRL[4] has read fixed 0xFF (logical 0x00 =
+  // STATUS) in every real frame ever captured -- every prior TX test, including
+  // 3B.24/3B.25's SECONDARY(33) attempts, still presented as an ordinary STATUS-type
+  // command frame, just with a new source address bolted on. A brand new secondary
+  // controller introducing itself for the first time seems more likely to need a
+  // LOGIN-type frame than a STATUS-type one -- this tests that directly. Logical value
+  // = 0b00100000 (messageType bits set to 2, writeBit and everything else left 0,
+  // matching every real CTRL[4] observed) = 0x20, inverted for the wire = 0xDF.
+  // Address (SECONDARY/33) and destination (UNIT/1) unchanged from the last test.
+  tx_buffer_[4] = 0xDF;
 
   has_pending_frame_ = true;
 
