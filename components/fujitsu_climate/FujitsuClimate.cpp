@@ -341,6 +341,21 @@ void FujitsuClimate::test_setpoint_step(int delta_c) {
   }
 }
 
+void FujitsuClimate::test_login_handshake() {
+  // Added 18 Aug 2026 (3B.27) -- see FujiHeatPump.h's armLoginHandshake() comment.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_login_handshake: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_login_handshake: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  ESP_LOGW(TAG, "TX TEST: login handshake burst (3 LOGIN frames, one per bus cycle) -- "
+                "check the wall unit now and watch for any change in the CORR debug log's raw[2] byte");
+  hp_.armLoginHandshake(3);
+}
+
 void FujitsuClimate::update_climate_state() {
   if (!hardware_present_) {
     // Keep defaults

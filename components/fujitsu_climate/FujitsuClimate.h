@@ -52,6 +52,11 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // this, per plan-to-completion.md Phase 2's test order (setpoint first).
   void test_setpoint_step(int delta_c);
 
+  // Login handshake test (added 18 Aug 2026, 3B.27) -- see FujiHeatPump.h's
+  // armLoginHandshake() for the full reasoning. Sends a short burst of pure
+  // LOGIN-type announcement frames (no command payload), one per bus cycle.
+  void test_login_handshake();
+
   // Bus health diagnostics (added 10 Aug 2026) -- optional, set only if configured
   // in YAML via the fujitsu_climate binary_sensor/text_sensor/sensor platforms.
   void set_bus_alive_binary_sensor(binary_sensor::BinarySensor *s) { bus_alive_binary_sensor_ = s; }

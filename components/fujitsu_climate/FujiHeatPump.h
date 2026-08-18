@@ -104,6 +104,22 @@ class FujiHeatPump {
   bool sendPendingFrame();
   bool hasPendingFrame() const { return has_pending_frame_; }
 
+  // --- Login handshake test (added 18 Aug 2026, 3B.27 -- see
+  // protocol-review-and-next-experiments.md) --- Every single-frame content variant
+  // tried so far (STATUS+START pre-3B.24, STATUS+SECONDARY, LOGIN+SECONDARY) sent
+  // cleanly with 3B.25's fixed timing but produced no sign of adoption. James asked to
+  // try a real handshake attempt rather than another single-field guess: this arms a
+  // short burst of pure LOGIN-type frames (no setpoint/command payload -- source=
+  // SECONDARY(33), dest=UNIT(1), messageType=LOGIN(2), state bytes mirrored unchanged
+  // from the last real CTRL frame) sent once per CTRL->UNIT gap across `count`
+  // consecutive bus cycles, in case a real secondary controller is expected to
+  // announce itself more than once before being recognized. Existing
+  // frame[2]/messageType visibility in the periodic "CORR: ... raw=[...]" debug log
+  // (processCorrectedFrame()) is enough to watch for any change in the indoor unit's
+  // own response type during/after the burst -- no new instrumentation needed for
+  // that part.
+  void armLoginHandshake(int count);
+
   // Checksum calculation
   uint8_t calculateChecksum(const uint8_t *data, size_t len);
 
@@ -301,6 +317,10 @@ class FujiHeatPump {
 
   // Build transmit frame
   void buildFrame();
+  // Build a pure LOGIN-type announcement frame (no command payload) -- see
+  // armLoginHandshake() above.
+  void buildLoginFrame();
+  int32_t login_burst_remaining_{0};
 
   // Timing
   uint32_t last_frame_time_{0};
