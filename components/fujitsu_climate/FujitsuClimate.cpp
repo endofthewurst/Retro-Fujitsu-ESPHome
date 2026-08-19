@@ -96,7 +96,7 @@ void FujitsuClimate::update_corrected_diagnostics_() {
   if (corrected_mode_text_sensor_ == nullptr && corrected_fan_raw_text_sensor_ == nullptr &&
       corrected_setpoint_sensor_ == nullptr && corrected_room_temp_sensor_ == nullptr &&
       corrected_economy_text_sensor_ == nullptr && mystery_bit_text_sensor_ == nullptr &&
-      message_dest_text_sensor_ == nullptr) {
+      message_dest_text_sensor_ == nullptr && message_type_text_sensor_ == nullptr) {
     return;  // Not configured in YAML -- nothing to do.
   }
 
@@ -204,6 +204,29 @@ void FujitsuClimate::update_corrected_diagnostics_() {
                hp_.getMessageDestSecondaryCount(), hp_.getMessageDestTotalCount(),
                hp_.getMessageDestFirstSecondaryMs());
       message_dest_text_sensor_->publish_state(buf);
+    }
+  }
+
+  // messageType/writeBit diagnostic (added 19 Aug 2026, 3B.33) -- see FujiHeatPump.h's
+  // getCorrMessageType()/getCorrWriteBit() comment. Persistent HA entity (not a
+  // one-shot capture) so a real command sent from the WIRED remote can be caught in
+  // HA history even if no live log capture happens to be running at that moment.
+  if (message_type_text_sensor_ != nullptr) {
+    if (!have_corr) {
+      message_type_text_sensor_->publish_state("No Data");
+    } else {
+      uint8_t t = hp_.getCorrMessageType();
+      const char *label;
+      switch (t) {
+        case 0: label = "STATUS"; break;
+        case 1: label = "ERROR"; break;
+        case 2: label = "LOGIN"; break;
+        case 3: label = "?"; break;
+        default: label = "?"; break;
+      }
+      char buf[64];
+      snprintf(buf, sizeof(buf), "type=%d(%s) write=%d", t, label, hp_.getCorrWriteBit() ? 1 : 0);
+      message_type_text_sensor_->publish_state(buf);
     }
   }
 }
@@ -415,6 +438,72 @@ void FujitsuClimate::test_status_command(int delta_c) {
   ESP_LOGW(TAG, "TX TEST: arming address-gated STATUS command (delta=%d) -- check the wall unit now, "
                 "will fire on the next messageDest==SECONDARY frame observed", delta_c);
   hp_.armStatusCommandTest(delta_c);
+}
+
+void FujitsuClimate::test_minimal_setpoint(int delta_c) {
+  // Added 19 Aug 2026 (3B.36) -- see FujiHeatPump.h's armMinimalSetpointTest() for the
+  // full reasoning. The minimal-clone command test.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_minimal_setpoint: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_minimal_setpoint: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  ESP_LOGW(TAG, "TX TEST: arming minimal-clone command (delta=%d) -- check the wall unit now, "
+                "will fire on the next messageDest==SECONDARY frame observed", delta_c);
+  hp_.armMinimalSetpointTest(delta_c);
+}
+
+void FujitsuClimate::test_minimal_setpoint_own_source(int delta_c) {
+  // Added 19 Aug 2026 (3B.37) -- see FujiHeatPump.h's armMinimalSetpointOwnSourceTest()
+  // for the full reasoning.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_minimal_setpoint_own_source: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_minimal_setpoint_own_source: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  ESP_LOGW(TAG, "TX TEST: arming minimal-clone own-source command (delta=%d) -- check the wall unit now, "
+                "will fire on the next messageDest==SECONDARY frame observed", delta_c);
+  hp_.armMinimalSetpointOwnSourceTest(delta_c);
+}
+
+void FujitsuClimate::test_mode_command(FujiMode mode) {
+  // Added 19 Aug 2026 (3B.38) -- see FujiHeatPump.h's armModeCommandTest() for the
+  // full reasoning. TX test target pivoted to mode/power per James's direction --
+  // verify via sensor.house_aircon_mode / climate.aircon_fujitsu_heat_pump AND
+  // switch.ac (independent oracle), not the physical display.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_mode_command: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_mode_command: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  ESP_LOGW(TAG, "TX TEST: arming address-gated mode command (mode=%d) -- check switch.ac / corrected_mode, "
+                "will fire on the next messageDest==SECONDARY frame observed", static_cast<int>(mode));
+  hp_.armModeCommandTest(mode);
+}
+
+void FujitsuClimate::test_power_command(bool on) {
+  // Added 19 Aug 2026 (3B.38) -- see FujiHeatPump.h's armPowerCommandTest() for the
+  // full reasoning.
+  if (!hardware_present_) {
+    ESP_LOGW(TAG, "test_power_command: no bus frames seen yet, refusing");
+    return;
+  }
+  if (!hp_.hasLastCtrlRaw()) {
+    ESP_LOGW(TAG, "test_power_command: no real CTRL frame captured yet, refusing");
+    return;
+  }
+  ESP_LOGW(TAG, "TX TEST: arming address-gated power command (on=%s) -- check switch.ac / corrected_mode, "
+                "will fire on the next messageDest==SECONDARY frame observed", on ? "true" : "false");
+  hp_.armPowerCommandTest(on);
 }
 
 void FujitsuClimate::update_climate_state() {

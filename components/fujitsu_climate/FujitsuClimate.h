@@ -73,6 +73,23 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // dest=UNIT(1) guess.
   void test_status_command(int delta_c);
 
+  // Minimal-clone command test (added 19 Aug 2026, 3B.36) -- see FujiHeatPump.h's
+  // armMinimalSetpointTest() for the full reasoning.
+  void test_minimal_setpoint(int delta_c);
+
+  // Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) -- see
+  // FujiHeatPump.h's armMinimalSetpointOwnSourceTest() for the full reasoning.
+  void test_minimal_setpoint_own_source(int delta_c);
+
+  // Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) -- see
+  // FujiHeatPump.h's armModeCommandTest()/armPowerCommandTest() for the full
+  // reasoning. TX test target pivoted from setpoint to mode/power per James's
+  // direction: both are solidly RX-decoded and independently checkable via
+  // switch.ac, so success/failure is far less ambiguous to verify than setpoint
+  // (whose own decode is what garbles during a bad TX collision).
+  void test_mode_command(FujiMode mode);
+  void test_power_command(bool on);
+
   // Bus health diagnostics (added 10 Aug 2026) -- optional, set only if configured
   // in YAML via the fujitsu_climate binary_sensor/text_sensor/sensor platforms.
   void set_bus_alive_binary_sensor(binary_sensor::BinarySensor *s) { bus_alive_binary_sensor_ = s; }
@@ -88,6 +105,10 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // one-shot summary -- it updates every 1s tick, indefinitely, so it can be watched
   // live across a real power cycle or a DIP-mode change without needing a fresh flash.
   void set_message_dest_text_sensor(text_sensor::TextSensor *s) { message_dest_text_sensor_ = s; }
+  // messageType/writeBit diagnostic (added 19 Aug 2026, 3B.33) -- see
+  // FujiHeatPump.h's getCorrMessageType()/getCorrWriteBit() comment. Same
+  // every-tick-update convention as message_dest above.
+  void set_message_type_text_sensor(text_sensor::TextSensor *s) { message_type_text_sensor_ = s; }
   // Boot/discovery-probe diagnostic (added 14 Aug 2026) -- see update_boot_probe_()
   // and FujiHeatPump.h for the full explanation. A single compact text_sensor rather
   // than several numeric ones, to avoid adding five new entities for what's
@@ -113,6 +134,7 @@ class FujitsuClimate : public climate::Climate, public PollingComponent, public 
   // understood.
   text_sensor::TextSensor *mystery_bit_text_sensor_{nullptr};
   text_sensor::TextSensor *message_dest_text_sensor_{nullptr};
+  text_sensor::TextSensor *message_type_text_sensor_{nullptr};
   text_sensor::TextSensor *boot_probe_text_sensor_{nullptr};
   bool boot_probe_published_{false};  // publish the summary once it's ready, not every tick
   text_sensor::TextSensor *frame_timing_text_sensor_{nullptr};

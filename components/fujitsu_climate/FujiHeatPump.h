@@ -247,6 +247,22 @@ class FujiHeatPump {
   uint32_t getMessageDestSecondaryCount() const { return message_dest_secondary_count_; }
   int32_t getMessageDestFirstSecondaryMs() const { return message_dest_first_secondary_ms_; }
 
+  // --- messageType/writeBit diagnostic (added 19 Aug 2026, 3B.33) ---
+  // Added after 3B.32's structurally-correct command (dest=UNIT, writeBit forced=1,
+  // controllerPresent forced=1, per upstream's real encodeFrame()) still didn't move
+  // the setpoint. Rather than guess a fourth time, this exposes the byte upstream
+  // calls messageType(bits[5:4])+writeBit(bit3) -- per this project's already-
+  // validated 2-byte-shift correspondence, this is corr frame[2] (inverted(UNIT[4])),
+  // the one byte in the corrected decode never yet surfaced as a live diagnostic
+  // (earlier notes only flagged it as "constant so far", which is consistent with
+  // every observed frame being an ordinary STATUS/writeBit=0 heartbeat -- exactly
+  // what should flip during a REAL command). Watching this live while a real command
+  // is sent from the WIRED remote (not the ESP32) gives ground truth on what an
+  // actually-accepted write looks like on this specific bus, instead of continuing to
+  // infer it from upstream's source alone.
+  uint8_t getCorrMessageType() const { return corr_message_type_; }
+  bool getCorrWriteBit() const { return corr_write_bit_; }
+
   // --- Address-gated LOGIN-ack test (added 18 Aug 2026, continued -- see
   // protocol-review-and-next-experiments.md's "real mechanism" addendum) ---
   // Every TX test to date (3B.20-3B.28) built and sent a frame on manual command,
@@ -263,15 +279,87 @@ class FujiHeatPump {
   // the arm, not how the send itself is timed.
   void armLoginAckTest();
 
-  // --- Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) ---
-  // Per upstream's real source: "Only later, once addressed again with a STATUS-type
-  // frame, does a real field change get sent." The LOGIN-ack test above is the
-  // handshake reply; this is the actual command, gated the same way (arms on the
-  // next observed messageDest==SECONDARY frame) but building a STATUS-type frame
-  // (messageType left at its natural cloned value, not forced to LOGIN) with the
-  // setpoint changed by delta_c and dest=SECONDARY (not UNIT(1), which every prior
-  // command test 3B.20-3B.26 used).
+  // --- Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31;
+  // REVISED 19 Aug 2026, 3B.32, after fetching upstream's actual source) ---
+  // 3B.31 sent cleanly (no bus fault) but did not move the setpoint. Cloning the real
+  // upstream (unreality/FujiHeatPump) source directly resolved two things 3B.31 had
+  // wrong, from decodeFrame()/encodeFrame()/waitForFrame():
+  //   1. writeBit -- lives in the SAME byte as messageType (bit3, 0b00001000 in
+  //      upstream's own indexing) and upstream ONLY sets it when a real field change
+  //      is pending (`if(updateFields) ff.writeBit = 1;`) -- every ordinary reply is
+  //      writeBit=0. 3B.31 never touched this byte at all (cloned from the template,
+  //      which always reads writeBit=0), so the "command" was structurally
+  //      indistinguishable from a heartbeat reply. This is the leading suspect for why
+  //      nothing stuck.
+  //   2. messageDest -- upstream's waitForFrame() uses dest=SECONDARY only when
+  //      replying to an incoming LOGIN-type frame (the buildLoginAckFrame() case
+  //      above). The ordinary steady-state reply -- the one that actually carries
+  //      writeBit and field changes -- replies with dest=UNIT(1) instead. 3B.31's
+  //      "every prior command test used dest=UNIT so let's try SECONDARY" reasoning
+  //      had it backwards: SECONDARY is for acknowledging a LOGIN frame specifically,
+  //      not for the general command-carrying reply. Since every frame this project
+  //      has observed addressed to us in Dual mode looks like ordinary STATUS traffic
+  //      (per processCorrectedFrame()'s "frame[2] constant" note), UNIT(1) is the
+  //      right destination for this reply, gated the same way as before (arms on the
+  //      next observed messageDest==SECONDARY frame) -- being addressed via
+  //      SECONDARY and replying via UNIT are two different, independently-correct
+  //      facts, not a contradiction.
   void armStatusCommandTest(int delta_c);
+
+  // --- Minimal-clone command test (added 19 Aug 2026, 3B.36) ---
+  // 3B.35's multi-frame capture (4 CTRL frames before / 4 after a real power-on
+  // command) found the real wired controller's frame NEVER changes source/dest/type
+  // to command something -- every byte except the one field being changed (byte[5]
+  // for power/mode/fan) stayed identical to its rest value (source=START, dest=
+  // PRIMARY, messageType=STATUS/writeBit=0) across all 8 samples. Every TX test this
+  // project has ever run (3B.20-3B.35) declared a different messageSource/messageDest
+  // than these real rest values -- which, per this evidence, may be exactly why none
+  // of them were adopted, regardless of writeBit. This is the simplest command frame
+  // attempted all session: clone the real last_ctrl_raw_ template byte-for-byte, with
+  // NO identity/type changes at all, and edit only the setpoint byte (byte[6]). Gated
+  // and timed the same proven-safe way as every other test this session (arms on the
+  // next observed messageDest==SECONDARY frame, sent via the existing 3B.25
+  // CTRL->UNIT-gap path).
+  void armMinimalSetpointTest(int delta_c);
+
+  // --- Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) ---
+  // 3B.36 (exact clone, including source=START -- the master's own identity) sent
+  // and caused a real bus fault (E:EE) -- but every OTHER test this session that
+  // declared a DIFFERENT source (SECONDARY) sent perfectly cleanly using this exact
+  // same gating/timing. That isolates the likely cause to something more specific
+  // than "any injected frame risks collision": claiming to BE the master's own
+  // identity (source=START) a second time in the same cycle is what confuses the
+  // unit, not injecting an extra frame per se. This combines the two working pieces:
+  // 3B.35's finding (don't touch dest/messageType -- leave them at the real rest
+  // values, PRIMARY/STATUS, exactly as cloned) with declaring OUR OWN identity
+  // (source=SECONDARY(33), proven safe across five earlier tests tonight) instead of
+  // cloning the master's START. Same gating/timing as every other test this session.
+  void armMinimalSetpointOwnSourceTest(int delta_c);
+
+  // --- Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) ---
+  // Per James's direction: rather than continuing setpoint-based TX experiments
+  // (where success is hard to verify -- the corrected decode's own setpoint field is
+  // exactly what garbles during a bad collision), pivot the TX test target to mode
+  // and power. Both are the most solidly RX-decoded fields in the whole project
+  // (Session B validated them live against every button press, and they've never
+  // been wrong or stuck since), and mode/power are ALSO independently confirmable via
+  // switch.ac (a WeMo-backed device, entirely separate from this project's own bus
+  // decode) -- so a command's real-world effect can be checked two independent ways
+  // instead of relying solely on the ESP32's own read of itself. Both build functions
+  // below reuse the exact 3B.37 scaffold -- the only pattern that has sent cleanly
+  // every single time it's been tried (5/5 tests this project has run): clone the
+  // real last_ctrl_raw_ template verbatim, declare our own SECONDARY(33) identity in
+  // byte[2], leave dest (byte[3]) and messageType (byte[4]) untouched at their real
+  // captured rest values (3B.35's ground-truth finding), and edit only the one
+  // payload byte the test is actually about. That byte, per processCorrectedFrame()'s
+  // field layout, is raw CTRL byte[5] ("B5"): bit0=power, bits[3:1]=mode,
+  // bits[6:4]=fan -- the same byte buildFrame() already writes wholesale for the
+  // (never address-gated) general TX-test path. These two functions write only the
+  // relevant sub-field of that byte, preserving the other two sub-fields from the
+  // real captured template rather than reconstructing them from decoded state, to
+  // stay as close to "minimal clone" as the setpoint-only tests already established.
+  void armModeCommandTest(FujiMode mode);
+  void armPowerCommandTest(bool on);
 
  protected:
   uart::UARTComponent *uart_{nullptr};
@@ -388,6 +476,27 @@ class FujiHeatPump {
   bool status_command_test_armed_{false};
   int status_command_delta_c_{0};
 
+  // Minimal-clone command test (added 19 Aug 2026, 3B.36) -- see
+  // armMinimalSetpointTest() above.
+  void buildMinimalSetpointFrame(int delta_c);
+  bool minimal_setpoint_test_armed_{false};
+  int minimal_setpoint_delta_c_{0};
+
+  // Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) -- see
+  // armMinimalSetpointOwnSourceTest() above.
+  void buildMinimalSetpointOwnSourceFrame(int delta_c);
+  bool minimal_setpoint_own_source_test_armed_{false};
+  int minimal_setpoint_own_source_delta_c_{0};
+
+  // Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) -- see
+  // armModeCommandTest()/armPowerCommandTest() above.
+  void buildModeCommandFrame(FujiMode mode);
+  void buildPowerCommandFrame(bool on);
+  bool mode_command_test_armed_{false};
+  FujiMode mode_command_target_{FujiMode::MODE_AUTO};
+  bool power_command_test_armed_{false};
+  bool power_command_target_{false};
+
   // Timing
   uint32_t last_frame_time_{0};
   uint32_t last_any_byte_time_{0};  // set on every raw byte, regardless of validity (added 10 Aug 2026)
@@ -439,6 +548,36 @@ class FujiHeatPump {
   uint32_t message_dest_total_count_{0};      // total corrected frames decoded
   uint32_t message_dest_secondary_count_{0};  // of which messageDest == SECONDARY(33)
   int32_t message_dest_first_secondary_ms_{-1};  // millis() of the first such sighting
+
+  // --- messageType/writeBit diagnostic (added 19 Aug 2026, 3B.33) -- see the public
+  // getters above for the full reasoning.
+  uint8_t corr_message_type_{0xFF};  // frame[2] bits[5:4]; 0xFF = none decoded yet
+  bool corr_write_bit_{false};       // frame[2] bit3
+  // Edge-detect state (added 19 Aug 2026, 3B.34) -- see processCorrectedFrame()'s
+  // writeBit rising-edge log. Unconditional (not throttled to 1/sec like the regular
+  // CORR debug line) specifically so a real write -- a rare, one-shot pulse -- can
+  // never fall in the gap between throttled samples the way the 12:20:29 capture's
+  // power-off/on toggle did.
+  bool prev_corr_write_bit_{false};
+
+  // --- Multi-frame CTRL capture around a real write (added 19 Aug 2026, 3B.35) ---
+  // The single-snapshot writeBit-edge capture (3B.34) showed the real CTRL frame at
+  // that instant sitting at its ordinary rest values (source=START, dest=PRIMARY,
+  // messageType/writeBit=STATUS/0) -- surprising enough (and easy enough to be a
+  // one-cycle timing artifact) that it's worth confirming with several frames of
+  // context either side, not just one. Small bounded ring buffer of raw CTRL frames,
+  // always kept warm (cheap -- just a memcpy per real CTRL frame), so "before" frames
+  // are already available the instant a write edge fires; "after" frames are then
+  // captured for a few more cycles post-trigger. Same self-limiting,
+  // bounded-capture-window pattern as the existing boot/timing instrumentation above.
+  static const size_t CTRL_RING_SIZE = 4;
+  uint8_t ctrl_ring_[CTRL_RING_SIZE][FRAME_LENGTH]{};
+  size_t ctrl_ring_pos_{0};
+  bool ctrl_ring_full_{false};
+  bool write_capture_active_{false};
+  int write_capture_after_remaining_{0};
+  void recordCtrlRing_(const uint8_t *frame);
+  void dumpWriteCapture_(uint8_t setpoint_raw, uint8_t mode, uint8_t fan, bool pwr);
 
   void feedCorrectedSync(uint8_t raw_byte);
   void processCorrectedFrame(const uint8_t *frame);
