@@ -8,7 +8,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.31"
+    version: "3B.37"
   on_boot:
     priority: 600
     then:
@@ -234,6 +234,9 @@ text_sensor:
     message_dest:
       name: "Message Dest"
       id: message_dest
+    message_type:
+      name: "Message Type"
+      id: message_type
     boot_probe:
       name: "Boot Probe"
       id: boot_probe
@@ -327,6 +330,105 @@ button:
     on_press:
       - lambda: |-
           id(fujitsu_hp)->test_status_command(1);
+
+  # Minimal-clone command test (added 19 Aug 2026, 3B.36) -- see
+  # protocol-review-and-next-experiments.md for the full reasoning: 3B.35's multi-frame
+  # capture showed the real controller never changes source/dest/type to command
+  # something, only the relevant payload byte. This clones the real frame verbatim and
+  # edits only the setpoint byte.
+  - platform: template
+    name: "TX Test: Setpoint +1 (minimal clone)"
+    id: tx_test_setpoint_minimal
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_minimal_setpoint(1);
+
+  # Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) -- see
+  # protocol-review-and-next-experiments.md. 3B.36 (exact clone incl. source=START)
+  # faulted; this keeps dest/messageType untouched (3B.35's finding) but declares our
+  # own SECONDARY identity instead of cloning the master's START.
+  - platform: template
+    name: "TX Test: Setpoint +1 (minimal clone, own source)"
+    id: tx_test_setpoint_minimal_own_source
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_minimal_setpoint_own_source(1);
+
+  # Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) -- TX test
+  # target pivoted from setpoint to mode/power per James's direction: both are
+  # solidly RX-decoded (never wrong/stuck since Session B) and independently
+  # checkable via switch.ac, so success/failure is far less ambiguous than setpoint,
+  # whose own decode is what garbles during a bad TX collision. Same proven-safe
+  # 3B.37 scaffold (own SECONDARY identity, dest/type untouched) -- only the mode/
+  # power sub-field of byte[5] is edited. Verify these via switch.ac AND
+  # sensor.house_aircon_mode / climate.aircon_fujitsu_heat_pump -- two independent
+  # read paths, not just the ESP32's own decode of itself.
+  - platform: template
+    name: "TX Test: Power On (gated)"
+    id: tx_test_power_on
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_power_command(true);
+
+  - platform: template
+    name: "TX Test: Power Off (gated)"
+    id: tx_test_power_off
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_power_command(false);
+
+  - platform: template
+    name: "TX Test: Mode Auto (gated)"
+    id: tx_test_mode_auto
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::MODE_AUTO);
+
+  - platform: template
+    name: "TX Test: Mode Cool (gated)"
+    id: tx_test_mode_cool
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::COOL);
+
+  - platform: template
+    name: "TX Test: Mode Dry (gated)"
+    id: tx_test_mode_dry
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::DRY);
+
+  - platform: template
+    name: "TX Test: Mode Fan (gated)"
+    id: tx_test_mode_fan
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::FAN);
+
+  - platform: template
+    name: "TX Test: Mode Heat (gated)"
+    id: tx_test_mode_heat
+    icon: "mdi:flask-outline"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::HEAT);
 
 # Diagnostic interval
 interval:

@@ -120,6 +120,26 @@ bool FujiHeatPump::readFrame() {
           memcpy(last_ctrl_raw_, rx_buffer_, FRAME_LENGTH);
           have_last_ctrl_raw_ = true;
 
+          // Multi-frame CTRL ring capture (added 19 Aug 2026, 3B.35) -- see
+          // recordCtrlRing_()/dumpWriteCapture_() below and the header comment. Kept
+          // warm unconditionally (cheap) so "before" context is always ready the
+          // instant a write edge fires elsewhere; also feeds the "after" side of the
+          // capture once one is in progress.
+          recordCtrlRing_(rx_buffer_);
+          if (write_capture_active_) {
+            char hex_buf[3 * FRAME_LENGTH + 1];
+            for (size_t i = 0; i < FRAME_LENGTH; i++) {
+              snprintf(hex_buf + i * 3, 4, "%02X ", rx_buffer_[i]);
+            }
+            hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+            ESP_LOGW(TAG, "  [after %d] CTRL wire=[%s]", 5 - write_capture_after_remaining_, hex_buf);
+            write_capture_after_remaining_--;
+            if (write_capture_after_remaining_ <= 0) {
+              write_capture_active_ = false;
+              ESP_LOGW(TAG, "=== end write capture ===");
+            }
+          }
+
           // NEW 18 Aug 2026 (3B.25): if a frame is armed (buildFrame() already called,
           // e.g. from test_setpoint_step()), send it right here -- immediately after a
           // real CTRL frame ends, at the start of the measured CTRL->UNIT gap -- rather
@@ -309,6 +329,35 @@ void FujiHeatPump::maybeDumpTimingCapture() {
   ESP_LOGI(TAG, "=== end frame timing capture dump ===");
 }
 
+// --- Multi-frame CTRL capture around a real write (added 19 Aug 2026, 3B.35) -- see
+// FujiHeatPump.h for the full explanation.
+
+void FujiHeatPump::recordCtrlRing_(const uint8_t *frame) {
+  memcpy(ctrl_ring_[ctrl_ring_pos_], frame, FRAME_LENGTH);
+  ctrl_ring_pos_ = (ctrl_ring_pos_ + 1) % CTRL_RING_SIZE;
+  if (ctrl_ring_pos_ == 0) ctrl_ring_full_ = true;
+}
+
+void FujiHeatPump::dumpWriteCapture_(uint8_t setpoint_raw, uint8_t mode, uint8_t fan, bool pwr) {
+  ESP_LOGW(TAG, "=== write capture: setpoint_raw=%d mode=%d fan=%d pwr=%s ===",
+           setpoint_raw, mode, fan, pwr ? "ON" : "OFF");
+  size_t count = ctrl_ring_full_ ? CTRL_RING_SIZE : ctrl_ring_pos_;
+  // Oldest-first: if the ring has wrapped, the oldest entry is at ctrl_ring_pos_;
+  // otherwise everything from 0 is in chronological order already.
+  size_t start = ctrl_ring_full_ ? ctrl_ring_pos_ : 0;
+  for (size_t i = 0; i < count; i++) {
+    size_t idx = (start + i) % CTRL_RING_SIZE;
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t j = 0; j < FRAME_LENGTH; j++) {
+      snprintf(hex_buf + j * 3, 4, "%02X ", ctrl_ring_[idx][j]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "  [before %d] CTRL wire=[%s]", (int) (count - i), hex_buf);
+  }
+  write_capture_active_ = true;
+  write_capture_after_remaining_ = 4;
+}
+
 void FujiHeatPump::parseFrame(const uint8_t *frame, size_t len, bool log_details) {
   if (len < FRAME_LENGTH) {
     ESP_LOGW(TAG, "Frame too short: %d bytes", len);
@@ -451,6 +500,12 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
   uint8_t corr_unknown_bit = (frame[1] >> 7) & 0x01;
   uint8_t corr_message_dest = frame[1] & 0x7F;
 
+  // messageType/writeBit diagnostic (added 19 Aug 2026, 3B.33) -- see FujiHeatPump.h's
+  // getCorrMessageType()/getCorrWriteBit() comment. frame[2] = inverted(UNIT[4]), per
+  // the same validated shift used for every other corrected-decode field.
+  uint8_t corr_message_type = (frame[2] >> 4) & 0x03;
+  bool corr_write_bit = (frame[2] >> 3) & 0x01;
+
   // Mirror into the diagnostic raw fields (unchanged since 10-11 Aug 2026).
   corr_mode_raw_ = corr_mode;
   corr_fan_raw_ = corr_fan;
@@ -461,6 +516,25 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
   corr_last_update_ms_ = millis();
   corr_unknown_bit_ = corr_unknown_bit;
   corr_message_dest_ = corr_message_dest;
+  corr_message_type_ = corr_message_type;
+  corr_write_bit_ = corr_write_bit;
+
+  // writeBit rising-edge log (added 19 Aug 2026, 3B.34) -- unconditional (not
+  // throttled), fires exactly on the 0->1 transition, alongside the full raw CTRL
+  // frame (both wire bytes and their inverted/logical form) captured by readFrame()'s
+  // last_ctrl_raw_. The 19 Aug capture confirmed writeBit's position via the UNIT
+  // side's own echo of an accepted change, but only ever exposed 2 bytes of the
+  // actual CTRL frame the wired remote transmits (CTRL[0]/[1], via the corrected
+  // merge) -- this captures all 8, unconditionally, the next time a real command is
+  // sent from the wired remote, so buildStatusCommandFrame()'s tx_buffer_ can be
+  // compared directly against verbatim ground truth instead of inference.
+  if (corr_write_bit && !prev_corr_write_bit_ && !write_capture_active_) {
+    // 3B.35: multi-frame capture (several CTRL frames before + several after) instead
+    // of the 3B.34 single-snapshot log -- see dumpWriteCapture_()/FujiHeatPump.h.
+    dumpWriteCapture_(corr_setpoint, corr_mode, corr_fan, corr_power);
+  }
+  prev_corr_write_bit_ = corr_write_bit;
+
   message_dest_total_count_++;
   if (corr_message_dest == 33) {  // FujiAddress::SECONDARY, per real unreality/FujiHeatPump source
     message_dest_secondary_count_++;
@@ -486,6 +560,31 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
     if (status_command_test_armed_) {
       status_command_test_armed_ = false;
       buildStatusCommandFrame(status_command_delta_c_);
+    }
+
+    // Minimal-clone command test (added 19 Aug 2026, 3B.36) -- see
+    // armMinimalSetpointTest()'s header comment. Same gating as every other test here.
+    if (minimal_setpoint_test_armed_) {
+      minimal_setpoint_test_armed_ = false;
+      buildMinimalSetpointFrame(minimal_setpoint_delta_c_);
+    }
+
+    // Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) -- see
+    // armMinimalSetpointOwnSourceTest()'s header comment.
+    if (minimal_setpoint_own_source_test_armed_) {
+      minimal_setpoint_own_source_test_armed_ = false;
+      buildMinimalSetpointOwnSourceFrame(minimal_setpoint_own_source_delta_c_);
+    }
+
+    // Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) -- see
+    // armModeCommandTest()/armPowerCommandTest()'s header comments.
+    if (mode_command_test_armed_) {
+      mode_command_test_armed_ = false;
+      buildModeCommandFrame(mode_command_target_);
+    }
+    if (power_command_test_armed_) {
+      power_command_test_armed_ = false;
+      buildPowerCommandFrame(power_command_target_);
     }
   }
 
@@ -516,11 +615,11 @@ void FujiHeatPump::processCorrectedFrame(const uint8_t *frame) {
     corr_last_log_ms_ = now_ms;
     ESP_LOGD(TAG,
              "CORR: pwr=%s mode=%d fan=%d err=%d econ=%d setpoint_raw=%d(0=none) "
-             "room=%dC mystery_bit=%d dest=%d(unk=%d) sec_count=%u/%u  "
+             "room=%dC mystery_bit=%d dest=%d(unk=%d) sec_count=%u/%u type=%d write=%d  "
              "raw=[%02X %02X %02X %02X %02X %02X %02X %02X]",
              corr_power ? "ON" : "OFF", corr_mode, corr_fan, corr_error, corr_economy,
              corr_setpoint, corr_room_temp, corr_ctrl_present, corr_message_dest, corr_unknown_bit,
-             message_dest_secondary_count_, message_dest_total_count_,
+             message_dest_secondary_count_, message_dest_total_count_, corr_message_type, corr_write_bit,
              frame[0], frame[1], frame[2], frame[3], frame[4], frame[5], frame[6], frame[7]);
   }
 }
@@ -802,23 +901,38 @@ void FujiHeatPump::buildStatusCommandFrame(int delta_c) {
   // addressed test since 3B.24.
   tx_buffer_[2] = 0xDE;
 
-  // raw byte[3]: messageDest = SECONDARY(33) + unknownBit, inverted (0x5E). NEW for a
-  // command frame -- every prior command test (3B.20-3B.26) declared dest=UNIT(1)
-  // (0x7E), on the assumption a command is "addressed to the indoor unit." The
-  // messageDest diagnostic (3B.29) and the LOGIN-ack test (3B.30) both confirm this
-  // controller is only ever addressed via dest=SECONDARY -- so its own replies,
-  // including a real content-changing command, use that same slot/addressing
-  // convention rather than the old UNIT(1) guess.
-  tx_buffer_[3] = 0x5E;
+  // raw byte[3]: messageDest = UNIT(1) + unknownBit, inverted (0x7E). REVERTED 19 Aug
+  // 2026 (3B.32) from 3B.31's dest=SECONDARY (0x5E) -- fetching upstream's real source
+  // (unreality/FujiHeatPump's waitForFrame()) showed dest=SECONDARY is specifically
+  // the reply to an incoming LOGIN-type frame (buildLoginAckFrame()'s case); the
+  // ordinary steady-state reply that actually carries writeBit/field changes replies
+  // with dest=UNIT(1) instead. Being addressed via SECONDARY (the gating condition
+  // below) and replying via UNIT are two independently-correct facts, not a
+  // contradiction -- 3B.31's reasoning conflated the two directions.
+  tx_buffer_[3] = 0x7E;
 
-  // raw byte[4]: messageType. Deliberately left UNTOUCHED here -- cloned from the
-  // real template, which reads 0xFF (logical 0x00 = STATUS) in every captured frame.
-  // This reverts 3B.26's messageType=LOGIN experiment for this specific test: per
-  // upstream's real source, LOGIN is for the handshake reply only (see
-  // buildLoginAckFrame() above); a real field-changing command is STATUS-type with
-  // writeBit=1. The exact bit position of writeBit within this byte isn't
-  // independently confirmed, so it's left at whatever the real controller's own
-  // STATUS frames already carry rather than guessed at.
+  // raw byte[4]: messageType (bits[5:4]) + writeBit (bit3), inverted. NEW 19 Aug 2026
+  // (3B.32) -- this is the actual fix. Upstream's decodeFrame()/encodeFrame() show
+  // writeBit lives in the SAME byte as messageType, and is the ONLY thing that
+  // distinguishes a real command from an ordinary heartbeat reply
+  // (`if(updateFields) ff.writeBit = 1;` in upstream's waitForFrame(), only ever set
+  // when a field change is actually pending). Every previous command test, including
+  // 3B.31, left this byte cloned from the template (raw 0xFF = logical 0x00 =
+  // messageType STATUS(0), writeBit=0) -- structurally indistinguishable from a
+  // passive echo. Logical value here: messageType=STATUS(0) unchanged, writeBit=1 =
+  // 0b00001000 = 0x08, inverted for the wire = 0xF7.
+  tx_buffer_[4] = 0xF7;
+
+  // raw byte[0]: controllerPresent (frame[6] bit0 on the RX side, matches upstream's
+  // kControllerPresentIndex/kControllerPresentMask exactly -- this is also what
+  // resolves this project's long-standing "Mystery Bit" question, see
+  // getCorrMysteryBit()). NEW 19 Aug 2026 (3B.32) -- forced to 1 here the same way
+  // buildLoginAckFrame() already does, rather than trusting whatever the cloned
+  // template happens to carry, since upstream's steady-state reply always sets this
+  // explicitly.
+  uint8_t logical_b0 = static_cast<uint8_t>(last_ctrl_raw_[0] ^ 0xFF);
+  logical_b0 |= 0x01;
+  tx_buffer_[0] = static_cast<uint8_t>(logical_b0 ^ 0xFF);
 
   // raw byte[6]: setpoint (bits[6:0]) + economy (bit7) -- same encoding buildFrame()
   // already uses, preserving economy from the real last frame.
@@ -836,7 +950,8 @@ void FujiHeatPump::buildStatusCommandFrame(int delta_c) {
       snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
     }
     hex_buf[3 * FRAME_LENGTH - 1] = '\0';
-    ESP_LOGW(TAG, "buildStatusCommandFrame(): built STATUS command (dest=SECONDARY, setpoint %.0f->%.0fdegC): %s",
+    ESP_LOGW(TAG, "buildStatusCommandFrame(): built STATUS command (dest=UNIT, writeBit=1, controllerPresent=1, "
+                  "setpoint %.0f->%.0fdegC): %s",
              temperature_, target, hex_buf);
   }
 }
@@ -846,6 +961,213 @@ void FujiHeatPump::armStatusCommandTest(int delta_c) {
   status_command_test_armed_ = true;
   ESP_LOGW(TAG, "armStatusCommandTest(): armed (delta=%d) -- will send exactly one STATUS command on the next "
                 "observed messageDest==SECONDARY frame", delta_c);
+}
+
+void FujiHeatPump::buildMinimalSetpointFrame(int delta_c) {
+  // Added 19 Aug 2026 (3B.36) -- see armMinimalSetpointTest()'s header comment. The
+  // simplest command frame attempted all session: an exact clone of the real
+  // controller's last captured frame, with every byte untouched except the setpoint.
+  // Deliberately does NOT touch tx_buffer_[2]/[3]/[4] (source/dest/type) at all --
+  // that's the entire point, per 3B.35's finding that the real controller never does
+  // either.
+  if (!have_last_ctrl_raw_) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildMinimalSetpointFrame(): no CTRL frame captured from the bus yet, refusing");
+    return;
+  }
+  if (std::isnan(temperature_)) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildMinimalSetpointFrame(): no current setpoint decoded, refusing");
+    return;
+  }
+  float target = temperature_ + static_cast<float>(delta_c);
+  if (target < 16.0f) target = 16.0f;
+  if (target > 30.0f) target = 30.0f;
+
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+
+  // raw byte[6]: setpoint (bits[6:0]) + economy (bit7) -- same encoding every other
+  // build function uses, preserving economy from the real last frame. This is the
+  // ONLY byte this function touches.
+  uint8_t setpoint_raw = static_cast<uint8_t>(target);
+  uint8_t last_logical_b6 = static_cast<uint8_t>(last_ctrl_raw_[6] ^ 0xFF);
+  bool economy_bit = (last_logical_b6 & 0x80) != 0;
+  uint8_t logical_b6 = (setpoint_raw & 0x7F) | (economy_bit ? 0x80 : 0x00);
+  tx_buffer_[6] = static_cast<uint8_t>(logical_b6 ^ 0xFF);
+
+  has_pending_frame_ = true;
+
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildMinimalSetpointFrame(): built minimal-clone command (setpoint %.0f->%.0fdegC, "
+                  "source/dest/type untouched): %s",
+             temperature_, target, hex_buf);
+  }
+}
+
+void FujiHeatPump::armMinimalSetpointTest(int delta_c) {
+  minimal_setpoint_delta_c_ = delta_c;
+  minimal_setpoint_test_armed_ = true;
+  ESP_LOGW(TAG, "armMinimalSetpointTest(): armed (delta=%d) -- will send exactly one minimal-clone command on the "
+                "next observed messageDest==SECONDARY frame", delta_c);
+}
+
+void FujiHeatPump::buildMinimalSetpointOwnSourceFrame(int delta_c) {
+  // Added 19 Aug 2026 (3B.37) -- see armMinimalSetpointOwnSourceTest()'s header
+  // comment. Same as buildMinimalSetpointFrame() (3B.36) -- dest/messageType left
+  // exactly as cloned, at their real rest values -- except messageSource is set to
+  // our own SECONDARY(33) identity rather than cloning the master's START, since
+  // that's the one variable 3B.36's fault isolates as the likely cause.
+  if (!have_last_ctrl_raw_) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildMinimalSetpointOwnSourceFrame(): no CTRL frame captured from the bus yet, refusing");
+    return;
+  }
+  if (std::isnan(temperature_)) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildMinimalSetpointOwnSourceFrame(): no current setpoint decoded, refusing");
+    return;
+  }
+  float target = temperature_ + static_cast<float>(delta_c);
+  if (target < 16.0f) target = 16.0f;
+  if (target > 30.0f) target = 30.0f;
+
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+
+  // raw byte[2]: messageSource = SECONDARY(33), inverted -- the one change from
+  // buildMinimalSetpointFrame(). dest (byte[3]) and messageType (byte[4]) are left
+  // untouched, exactly as cloned from the real template.
+  tx_buffer_[2] = 0xDE;
+
+  // raw byte[6]: setpoint (bits[6:0]) + economy (bit7) -- same encoding every other
+  // build function uses.
+  uint8_t setpoint_raw = static_cast<uint8_t>(target);
+  uint8_t last_logical_b6 = static_cast<uint8_t>(last_ctrl_raw_[6] ^ 0xFF);
+  bool economy_bit = (last_logical_b6 & 0x80) != 0;
+  uint8_t logical_b6 = (setpoint_raw & 0x7F) | (economy_bit ? 0x80 : 0x00);
+  tx_buffer_[6] = static_cast<uint8_t>(logical_b6 ^ 0xFF);
+
+  has_pending_frame_ = true;
+
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildMinimalSetpointOwnSourceFrame(): built command (source=SECONDARY, dest/type untouched, "
+                  "setpoint %.0f->%.0fdegC): %s",
+             temperature_, target, hex_buf);
+  }
+}
+
+void FujiHeatPump::armMinimalSetpointOwnSourceTest(int delta_c) {
+  minimal_setpoint_own_source_delta_c_ = delta_c;
+  minimal_setpoint_own_source_test_armed_ = true;
+  ESP_LOGW(TAG, "armMinimalSetpointOwnSourceTest(): armed (delta=%d) -- will send exactly one command on the next "
+                "observed messageDest==SECONDARY frame", delta_c);
+}
+
+void FujiHeatPump::buildModeCommandFrame(FujiMode mode) {
+  // Added 19 Aug 2026 (3B.38) -- see armModeCommandTest()'s header comment. Same
+  // proven-safe scaffold as buildMinimalSetpointOwnSourceFrame() (3B.37): clone the
+  // real template verbatim, declare our own SECONDARY(33) identity, leave dest/type
+  // untouched. The only change here is WHICH sub-field of byte[5] gets edited --
+  // mode (bits[3:1]) instead of the setpoint byte -- since mode/power are the fields
+  // James asked to pivot TX testing onto: solidly RX-decoded and independently
+  // checkable via switch.ac, unlike setpoint (which is what garbles during a bad
+  // collision, making its own success hard to verify).
+  if (!have_last_ctrl_raw_) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildModeCommandFrame(): no CTRL frame captured from the bus yet, refusing");
+    return;
+  }
+  if (!on_off_) {
+    // Mode is meaningless while the unit is off -- refuse rather than send a
+    // confusing frame. Use the power test to turn it on first.
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildModeCommandFrame(): unit currently OFF, refusing (use the power test to turn it on first)");
+    return;
+  }
+
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+
+  // raw byte[2]: messageSource = SECONDARY(33), inverted -- unchanged from every
+  // proven-safe test since 3B.37.
+  tx_buffer_[2] = 0xDE;
+
+  // raw byte[5]: power (bit0) / mode (bits[3:1]) / fan (bits[6:4]). Preserve power and
+  // fan from the REAL captured template rather than from decoded state, to stay as
+  // close to "minimal clone" as possible -- only the mode bits are deliberately
+  // changed.
+  uint8_t last_logical_b5 = static_cast<uint8_t>(last_ctrl_raw_[5] ^ 0xFF);
+  uint8_t logical_b5 = last_logical_b5 & ~0x0Eu;  // clear mode bits[3:1], keep power+fan
+  logical_b5 |= (static_cast<uint8_t>(mode) & 0x07) << 1;
+  tx_buffer_[5] = static_cast<uint8_t>(logical_b5 ^ 0xFF);
+
+  has_pending_frame_ = true;
+
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildModeCommandFrame(): built command (source=SECONDARY, dest/type untouched, "
+                  "mode -> %d): %s",
+             static_cast<int>(mode), hex_buf);
+  }
+}
+
+void FujiHeatPump::buildPowerCommandFrame(bool on) {
+  // Added 19 Aug 2026 (3B.38) -- see armPowerCommandTest()'s header comment. Same
+  // scaffold as buildModeCommandFrame() above, editing only the power bit (bit0 of
+  // byte[5]) and preserving mode/fan from the real captured template.
+  if (!have_last_ctrl_raw_) {
+    has_pending_frame_ = false;
+    ESP_LOGW(TAG, "buildPowerCommandFrame(): no CTRL frame captured from the bus yet, refusing");
+    return;
+  }
+
+  memcpy(tx_buffer_, last_ctrl_raw_, FRAME_LENGTH);
+
+  tx_buffer_[2] = 0xDE;  // messageSource = SECONDARY(33), inverted
+
+  uint8_t last_logical_b5 = static_cast<uint8_t>(last_ctrl_raw_[5] ^ 0xFF);
+  uint8_t logical_b5 = last_logical_b5 & ~0x01u;  // clear power bit, keep mode+fan
+  logical_b5 |= on ? 0x01 : 0x00;
+  tx_buffer_[5] = static_cast<uint8_t>(logical_b5 ^ 0xFF);
+
+  has_pending_frame_ = true;
+
+  {
+    char hex_buf[3 * FRAME_LENGTH + 1];
+    for (size_t i = 0; i < FRAME_LENGTH; i++) {
+      snprintf(hex_buf + i * 3, 4, "%02X ", tx_buffer_[i]);
+    }
+    hex_buf[3 * FRAME_LENGTH - 1] = '\0';
+    ESP_LOGW(TAG, "buildPowerCommandFrame(): built command (source=SECONDARY, dest/type untouched, "
+                  "power -> %s): %s",
+             on ? "ON" : "OFF", hex_buf);
+  }
+}
+
+void FujiHeatPump::armModeCommandTest(FujiMode mode) {
+  mode_command_target_ = mode;
+  mode_command_test_armed_ = true;
+  ESP_LOGW(TAG, "armModeCommandTest(): armed (mode=%d) -- will send exactly one command on the next observed "
+                "messageDest==SECONDARY frame", static_cast<int>(mode));
+}
+
+void FujiHeatPump::armPowerCommandTest(bool on) {
+  power_command_target_ = on;
+  power_command_test_armed_ = true;
+  ESP_LOGW(TAG, "armPowerCommandTest(): armed (on=%s) -- will send exactly one command on the next observed "
+                "messageDest==SECONDARY frame", on ? "true" : "false");
 }
 
 bool FujiHeatPump::sendPendingFrame() {

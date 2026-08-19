@@ -18,6 +18,11 @@ CONF_MYSTERY_BIT = "mystery_bit"
 # boot_probe/frame_timing below, this updates continuously (not a one-shot summary),
 # so it can be watched live across a DIP-mode change or a real power cycle.
 CONF_MESSAGE_DEST = "message_dest"
+# Added 19 Aug 2026 (3B.33) -- see FujiHeatPump.h's getCorrMessageType()/
+# getCorrWriteBit() comment. Same "updates continuously" convention as
+# message_dest above -- exists to catch what a real, indoor-unit-accepted write
+# command from the WIRED remote actually looks like on the bus.
+CONF_MESSAGE_TYPE = "message_type"
 # Added 14 Aug 2026, Phase 2 item 2 -- one-shot summary of the boot/discovery-probe
 # capture window, published once ~12s after boot. See FujiHeatPump.h/.cpp for the
 # capture logic and protocol-review-and-next-experiments.md for the background.
@@ -59,6 +64,10 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:account-arrow-right-outline",
         ),
+        cv.Optional(CONF_MESSAGE_TYPE): text_sensor.text_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:pencil-outline",
+        ),
         cv.Optional(CONF_BOOT_PROBE): text_sensor.text_sensor_schema(
             entity_category="diagnostic",
             icon="mdi:timer-outline",
@@ -91,6 +100,9 @@ async def to_code(config):
     if CONF_MESSAGE_DEST in config:
         sens = await text_sensor.new_text_sensor(config[CONF_MESSAGE_DEST])
         cg.add(parent.set_message_dest_text_sensor(sens))
+    if CONF_MESSAGE_TYPE in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_MESSAGE_TYPE])
+        cg.add(parent.set_message_type_text_sensor(sens))
     if CONF_BOOT_PROBE in config:
         sens = await text_sensor.new_text_sensor(config[CONF_BOOT_PROBE])
         cg.add(parent.set_boot_probe_text_sensor(sens))
