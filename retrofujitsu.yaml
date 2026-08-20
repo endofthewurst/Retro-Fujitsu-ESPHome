@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.2"
+    version: "4A.3"
   on_boot:
     priority: 600
     then:
@@ -132,6 +132,7 @@ light:
   - platform: status_led
     id: status_light
     name: "Status LED"
+    internal: true
     pin:
       number: GPIO2
       inverted: false
@@ -313,6 +314,19 @@ text_sensor:
     lambda: |-
       return std::string("https://github.com/endofthewurst/Retro-Fujitsu-ESPHome");
 
+  # Read-only description of what the Status LED is currently displaying -- added
+  # 21 Aug 2026 at James's request. The light entity above is now internal (no
+  # switch/effect dropdown exposed to HA or the web UI); this is the replacement --
+  # it just reports whichever effect name real conditions (boot/WiFi/HA connection
+  # state) have already driven the light to, via LightState::get_effect_name().
+  - platform: template
+    name: "Status LED Pattern"
+    icon: "mdi:led-outline"
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      return id(status_light).get_effect_name();
+
   # Trimmed to bus_status in Phase 4 -- see components/fujitsu_climate/text_sensor.py
   # for why the other exploratory diagnostics were retired. thermo_sensor re-added
   # 20 Aug 2026, explicitly labelled unconfirmed -- see text_sensor.py's comment.
@@ -361,6 +375,27 @@ switch:
       - lambda: 'id(fujitsu_hp)->set_control_enabled(true);'
     turn_off_action:
       - lambda: 'id(fujitsu_hp)->set_control_enabled(false);'
+
+
+  # Economy Mode as a standalone switch -- added 21 Aug 2026. climate.preset already
+  # supports CLIMATE_PRESET_ECO (confirmed live-adopted, both directions, same day),
+  # but neither the web UI nor a plain HA dashboard surfaces a preset control the same
+  # way Fan Speed/Set Temperature needed their own entities (20 Aug 2026, same reason:
+  # the climate row's own preset control isn't exposed by the web UI). This mirrors
+  # that exact pattern via make_call() rather than adding new state anywhere.
+  - platform: template
+    name: "Economy Mode"
+    id: fujitsu_economy_mode
+    icon: "mdi:leaf"
+    entity_category: config
+    lambda: |-
+      return id(fujitsu_hp).preset == climate::CLIMATE_PRESET_ECO;
+    turn_on_action:
+      - lambda: |-
+          id(fujitsu_hp).make_call().set_preset(climate::CLIMATE_PRESET_ECO).perform();
+    turn_off_action:
+      - lambda: |-
+          id(fujitsu_hp).make_call().set_preset(climate::CLIMATE_PRESET_NONE).perform();
 
 # Buttons
 button:
