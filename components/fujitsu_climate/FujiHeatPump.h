@@ -1,587 +1,226 @@
 #pragma once
 
-#include "esphome/core/component.h"
-#include "esphome/components/uart/uart.h"
-
-namespace esphome {
-namespace fujitsu_climate {
-
-// Fujitsu protocol frame structure
-// Based on live bus capture from ART30LUAK / UTY-RNNUM (RSG series ~2010).
-// NOTE: This model uses DIFFERENT frame markers than reference implementations
-//       (unreality/FujiHeatPump, jaroslawprzybylowicz) which targeted other models.
+// ---------------------------------------------------------------------------
+// Vendored from unreality/FujiHeatPump (https://github.com/unreality/FujiHeatPump),
+// MIT licensed, Copyright 2021 Raal Goff. Brought in close to verbatim on 19 Aug 2026
+// (Phase 4 rebuild) after a hard code review
+// (tx-architecture-review-and-adoption-plan.md) found this project's own hand-rolled
+// re-implementation had independently re-derived the same field layout, addressing,
+// and writeBit semantics upstream already had -- the real gap was architectural (no
+// continuous reply loop, bus I/O sharing ESPHome's cooperative loop() instead of a
+// dedicated task), not protocol-level. Field-for-field, this is the exact class that
+// was already proven correct against this hardware across Session B and 3B.29-3B.38's
+// ground-truth captures -- see that doc for the full comparison.
 //
-// Observed 16-byte repeating cycle on the bus:
-//   FE DF DF 7F FF D6 EB 6B  <- Unit status frame (starts 0xFE, ends 0x6B)
-//   D1 FF FF 5F FF D6 EB 4B  <- Controller frame  (starts 0xD0-0xDE, ends 0x4B)
-//
-// The controller start byte lower nibble appears to toggle/vary (0xD0, 0xD1 seen).
-// Both frame types are 8 bytes.
-static const uint8_t FRAME_START = 0xFE;           // Unit status frame start
-static const uint8_t FRAME_END = 0x6B;             // Unit frame end marker (ART30LUAK)
-static const uint8_t FRAME_END_ALT = 0xEB;         // Alt unit frame end (other models / keep for compat)
-static const uint8_t FRAME_END_CTRL = 0x4B;        // Controller frame end marker
-static const uint8_t FRAME_CTRL_START_NIBBLE = 0xD0; // Controller frame start: upper byte = 0xD, lower = varies
-static const uint8_t FRAME_LENGTH = 8;
+// Deliberate deviations from upstream, each called out where it happens below:
+//   1. sendPendingFrame()'s reply gate: upstream waits >50ms since the last received
+//      frame before sending. This project measured the real CTRL->UNIT gap on this
+//      specific bus directly (3B.23) and found it to be ~0ms in Normal DIP mode and at
+//      most ~10.9ms in Dual mode -- a 50ms wait would never land in a gap that small,
+//      it would always land mid-frame on top of live traffic. kMinReplyGapMs replaces
+//      the hardcoded 50 with a named, much smaller constant reflecting that finding.
+//   2. connect()'s rxPin/txPin overload already existed upstream for ESP32 -- kept
+//      unmodified, just noting it's how FujitsuClimate::setup() wires GPIO16/17.
+//   3. Added lastRawControllerPresent/getLastRawControllerPresent() (20 Aug 2026) --
+//      a passive, read-only capture of the incoming frame's raw controllerPresent bit
+//      (frame[6] bit0) BEFORE waitForFrame()'s STATUS/LOGIN branches overwrite `ff` to
+//      build our own reply. Upstream doesn't preserve this anywhere once decoded --
+//      it's immediately reused as an outgoing field. This project's own history
+//      (test-and-dev-workflow.md's "Thermo Sensor / Mystery Bit investigation" and
+//      state-of-play.md's protocol review) found this exact bit was the leading
+//      candidate for the UTY-RNNUM's Thermo Sensor Local/Remote setting, but four
+//      rounds of live button testing never confirmed it, and a later upstream-source
+//      review concluded it more likely reflects "a secondary controller has logged
+//      in" than Local/Remote -- unconfirmed either way. This getter exists purely so a
+//      diagnostic sensor can surface the raw bit for a future dedicated live test
+//      (single button press, precise timestamp, no standby cycling -- see
+//      test-and-dev-workflow.md's recommended next test); it does not change any
+//      protocol behaviour and nothing here claims the mapping is solved.
+// Everything else -- decodeFrame()/encodeFrame()'s bit layout, the waitForFrame()
+// state machine (reply-only, gated on messageDest == controllerAddress, LOGIN vs
+// STATUS branching), the FujiMode/FujiFanMode/FujiMessageType/FujiAddress enums -- is
+// unmodified from upstream.
+// ---------------------------------------------------------------------------
 
-// Target temperature encoding: stored value = (degC - TEMP_OFFSET), range [0, TEMP_RAW_MAX]
-// NOTE: retained for the old/deprecated decode below. The corrected decode (which now
-// drives the live climate entity, as of 11 Aug 2026 / 3B.18) reads setpoint directly in
-// whole degrees C with no offset -- see processCorrectedFrame().
-static const uint8_t TEMP_OFFSET = 16;
-static const uint8_t TEMP_RAW_MAX = 14;  // 14 + 16 = 30degC (upper visual limit)
+#include <Arduino.h>
+#include <HardwareSerial.h>
 
-// Sanity ceiling for room-temperature readings
-static const float ROOM_TEMP_MAX_C = 50.0f;
+const byte kModeIndex = 3;
+const byte kModeMask = 0b00001110;
+const byte kModeOffset = 1;
 
-// Controller types
-enum class ControllerType : uint8_t {
-  PRIMARY = 0x00,
-  SECONDARY = 0x01,
-};
+const byte kFanIndex = 3;
+const byte kFanMask = 0b01110000;
+const byte kFanOffset = 4;
 
-// Operating modes (from unreality/FujiHeatPump). Values are deliberately aligned with
-// the corrected decode's frame[3] bits[3:1] field (1=Fan..5=Auto) so that
-// processCorrectedFrame() can cast its decoded raw mode straight into this enum --
-// see the corrected-decode section below.
-enum class FujiMode : uint8_t {
-  UNKNOWN = 0,
-  FAN = 1,
-  DRY = 2,
-  COOL = 3,
-  HEAT = 4,
-  MODE_AUTO = 5,
-};
+const byte kEnabledIndex = 3;
+const byte kEnabledMask = 0b00000001;
+const byte kEnabledOffset = 0;
 
-// Fan modes (from unreality/FujiHeatPump). Values are deliberately aligned with the
-// corrected decode's frame[3] bits[6:4] field. Confirmed live against a full
-// High->Medium->Low->Auto cycle on the physical remote, 11 Aug 2026 (Session B):
-// Auto=0, Low=2, Medium=3, High=4 all matched the display in lockstep. Quiet=1 has
-// not yet been exercised live -- kept in the enum on the strength of the observed
-// AUTO/LOW/MED/HIGH spacing, not yet independently confirmed.
-enum class FujiFanMode : uint8_t {
-  FAN_AUTO = 0,
-  QUIET = 1,
-  FAN_LOW = 2,
-  MEDIUM = 3,
-  FAN_HIGH = 4,
-};
+const byte kErrorIndex = 3;
+const byte kErrorMask = 0b10000000;
+const byte kErrorOffset = 7;
+
+const byte kEconomyIndex = 4;
+const byte kEconomyMask = 0b10000000;
+const byte kEconomyOffset = 7;
+
+const byte kTemperatureIndex = 4;
+const byte kTemperatureMask = 0b01111111;
+const byte kTemperatureOffset = 0;
+
+const byte kUpdateMagicIndex = 5;
+const byte kUpdateMagicMask = 0b11110000;
+const byte kUpdateMagicOffset = 4;
+
+const byte kSwingIndex = 5;
+const byte kSwingMask = 0b00000100;
+const byte kSwingOffset = 2;
+
+const byte kSwingStepIndex = 5;
+const byte kSwingStepMask = 0b00000010;
+const byte kSwingStepOffset = 1;
+
+const byte kControllerPresentIndex = 6;
+const byte kControllerPresentMask = 0b00000001;
+const byte kControllerPresentOffset = 0;
+
+const byte kControllerTempIndex = 6;
+const byte kControllerTempMask = 0b01111110;
+const byte kControllerTempOffset = 1;
+
+typedef struct FujiFrames {
+  byte onOff = 0;
+  byte temperature = 16;
+  byte acMode = 0;
+  byte fanMode = 0;
+  byte acError = 0;
+  byte economyMode = 0;
+  byte swingMode = 0;
+  byte swingStep = 0;
+  byte controllerPresent = 0;
+  byte updateMagic = 0;  // unsure what this value indicates
+  byte controllerTemp = 16;
+
+  bool writeBit = false;
+  bool loginBit = false;
+  bool unknownBit = false;  // unsure what this bit indicates
+
+  byte messageType = 0;
+  byte messageSource = 0;
+  byte messageDest = 0;
+} FujiFrame;
 
 class FujiHeatPump {
+ private:
+  HardwareSerial *_serial;
+  byte readBuf[8];
+  byte writeBuf[8];
+
+  byte controllerAddress;
+  bool controllerIsPrimary = true;
+  bool seenSecondaryController = false;
+  bool controllerLoggedIn = false;
+  unsigned long lastFrameReceived;
+
+  byte updateFields;
+  FujiFrame updateState;
+  FujiFrame currentState;
+
+  // Deviation #3 -- see the file-header comment above. Set once per valid incoming
+  // frame, immediately after decodeFrame(), before anything in waitForFrame() mutates
+  // the local `ff` copy into an outgoing reply. Read-only outside this class.
+  byte lastRawControllerPresent = 0;
+
+  FujiFrame decodeFrame();
+  void encodeFrame(FujiFrame ff);
+  void printFrame(byte buf[8], FujiFrame ff);
+
+  bool pendingFrame = false;
+
+  // Deviation #1 from upstream -- see the file-header comment above. Upstream hardcodes
+  // 50 here; this project's own measured bus timing (3B.23: 0-10.9ms real CTRL->UNIT
+  // gap, never 50ms) means the reply has to go out essentially immediately once built,
+  // not after an artificial wait. sendPendingFrame() is called right after
+  // waitForFrame() returns true in FujitsuClimate's dedicated bus task -- by the time
+  // that call happens, `millis() - lastFrameReceived` is already >= this many ms just
+  // from decode/build overhead, so 0 is deliberately permissive rather than a real
+  // delay.
+  static const unsigned long kMinReplyGapMs = 0;
+
  public:
-  FujiHeatPump() = default;
+  void connect(HardwareSerial *serial, bool secondary);
+  void connect(HardwareSerial *serial, bool secondary, int rxPin, int txPin);
 
-  // Initialize connection
-  void connect(uart::UARTComponent *uart, bool secondary);
+  bool waitForFrame();
+  void sendPendingFrame();
+  bool isBound();
+  bool updatePending();
 
-  // Frame reading (non-blocking -- call from loop())
-  bool readFrame();
+  void setOnOff(bool o);
+  void setTemp(byte t);
+  void setMode(byte m);
+  void setFanMode(byte fm);
+  void setEconomyMode(byte em);
+  void setSwingMode(byte sm);
+  void setSwingStep(byte ss);
 
-  // State setters (prepare frame for sending). NOTE: as of 3B.18 these are no longer
-  // called from FujitsuClimate::control() (still read-only pending broader Phase 2
-  // validation) -- but as of the Phase 2 TX-test work (11 Aug 2026), they ARE called
-  // from FujitsuClimate::test_setpoint_step(), a single deliberate, manually-triggered
-  // test entry point (see that method and buildFrame() below). buildFrame()'s output
-  // has never been sent to the real bus before this -- see buildFrame() for the
-  // current, corrected-decode-based approach and its own caveats.
-  void setOnOff(bool on);
-  void setMode(FujiMode mode);
-  void setTemperature(float temp);
-  void setFanMode(FujiFanMode fan);
+  bool getOnOff();
+  byte getTemp();
+  byte getMode();
+  byte getFanMode();
+  byte getEconomyMode();
+  byte getSwingMode();
+  byte getSwingStep();
+  byte getControllerTemp();
 
-  // State getters (from received frames). As of 3B.18, these are populated from the
-  // corrected decode (see processCorrectedFrame()) rather than the old parseFrame()/
-  // parseCTRLFrame() below -- promoted to primary after Session B validated the
-  // corrected decode live against real button presses for every field here (power,
-  // mode, fan, setpoint) and found the old decode wrong or stuck on all of them.
-  bool getOnOff() const { return on_off_; }
-  FujiMode getMode() const { return mode_; }
-  float getTemperature() const { return temperature_; }
-  float getCurrentTemperature() const { return current_temperature_; }
-  FujiFanMode getFanMode() const { return fan_mode_; }
+  // Added (not in upstream) so FujitsuClimate can implement its own, wider bus-alive
+  // threshold on top of isBound()'s fixed 1000ms -- this project's own history
+  // (state-of-play.md, 3B.19) found 1-3s quiet gaps are normal on this bus and a
+  // 1000ms-or-less threshold flickers on them. Read-only; doesn't change isBound()'s
+  // own behaviour or anything upstream.
+  unsigned long getLastFrameReceived() { return lastFrameReceived; }
 
-  // Send pending changes
-  bool sendPendingFrame();
-  bool hasPendingFrame() const { return has_pending_frame_; }
+  // Deviation #3 -- see the file-header comment above. Raw, passive, unconfirmed --
+  // NOT the same as FujiFrame::controllerPresent on currentState (which, for a
+  // secondary controller, reflects OUR OWN reply's value, not the incoming frame's).
+  byte getLastRawControllerPresent() { return lastRawControllerPresent; }
 
-  // --- Login handshake test (added 18 Aug 2026, 3B.27 -- see
-  // protocol-review-and-next-experiments.md) --- Every single-frame content variant
-  // tried so far (STATUS+START pre-3B.24, STATUS+SECONDARY, LOGIN+SECONDARY) sent
-  // cleanly with 3B.25's fixed timing but produced no sign of adoption. James asked to
-  // try a real handshake attempt rather than another single-field guess: this arms a
-  // short burst of pure LOGIN-type frames (no setpoint/command payload -- source=
-  // SECONDARY(33), dest=UNIT(1), messageType=LOGIN(2), state bytes mirrored unchanged
-  // from the last real CTRL frame) sent once per CTRL->UNIT gap across `count`
-  // consecutive bus cycles, in case a real secondary controller is expected to
-  // announce itself more than once before being recognized. Existing
-  // frame[2]/messageType visibility in the periodic "CORR: ... raw=[...]" debug log
-  // (processCorrectedFrame()) is enough to watch for any change in the indoor unit's
-  // own response type during/after the burst -- no new instrumentation needed for
-  // that part.
-  void armLoginHandshake(int count);
+  FujiFrame *getCurrentState();
+  FujiFrame *getUpdateState();
+  byte getUpdateFields();
 
-  // Checksum calculation
-  uint8_t calculateChecksum(const uint8_t *data, size_t len);
-
-  // Debug helpers
-  void setDebug(bool debug) { debug_ = debug; }
-  bool isConnected() const { return connected_; }
-
-  // Bus-activity timestamps for a higher-level alive/dead diagnostic (added 10 Aug
-  // 2026). last_frame_time_ only advances on a structurally valid frame (the proven
-  // sync/parse logic, not the experimental corrected-decode); last_any_byte_time_
-  // advances on every byte regardless of validity -- together they distinguish
-  // `no signal at all` vs `noise but no valid frames` vs `bus OK`.
-  uint32_t getLastFrameTime() const { return last_frame_time_; }
-  uint32_t getLastByteTime() const { return last_any_byte_time_; }
-
-  // Live mirror of the corrected decode (added 10 Aug 2026, Session B kickoff;
-  // promoted to the primary decode 11 Aug 2026, 3B.18) -- exposed as diagnostic HA
-  // entities in parallel with the values now feeding the main climate entity above,
-  // so the two can be cross-checked. 0xFF means "no corrected frame decoded yet".
-  uint8_t getCorrModeRaw() const { return corr_mode_raw_; }
-  uint8_t getCorrFanRaw() const { return corr_fan_raw_; }
-  uint32_t getCorrLastUpdateTime() const { return corr_last_update_ms_; }
-  uint8_t getCorrSetpointRaw() const { return corr_setpoint_raw_; }
-  uint8_t getCorrRoomTempRaw() const { return corr_room_temp_raw_; }
-  bool getCorrEconomy() const { return corr_economy_; }
-  // Candidate bit hypothesized (per the Fujitsu manual's description of the "Thermo
-  // Sensor" Local/Remote setting) to be frame[6] bit0. Live testing on 11 Aug 2026
-  // did NOT cleanly confirm this -- the bit was observed not moving at all across two
-  // separate button presses, then moving once in a way whose direction didn't
-  // obviously match the stated action. Renamed from "Corrected Thermo Sensor" to
-  // "Mystery Bit" pending further investigation -- do not treat this as a trusted
-  // Thermo Sensor readout yet.
-  bool getCorrMysteryBit() const { return corr_mystery_bit_; }
-
-  // Whether a real CTRL frame has ever been captured off the bus -- buildFrame()
-  // refuses to build a command frame without one to use as a template (added for
-  // Phase 2 TX work, 11 Aug 2026).
-  bool hasLastCtrlRaw() const { return have_last_ctrl_raw_; }
-
-  // --- Boot/discovery-probe instrumentation (added 14 Aug 2026, Phase 2 item 2 --
-  // see protocol-review-and-next-experiments.md) ---
-  // Looks for the ~4-second one-shot secondary-controller discovery probe that
-  // unreality/FujiHeatPump's README describes, across a normal power cycle. Tracks
-  // two established candidate signals directly (raw CTRL byte[3] deviating from its
-  // 0x5F rest value -- see hardware-and-protocol.md's "change-in-progress flag" /
-  // upstream-comparison.md's "destination-1" reading of the same byte; and raw UNIT
-  // bytes[1]/[2] deviating from their 0xDF rest value -- the address-byte candidate
-  // from upstream-comparison.md's "source reads 32 and 0, where upstream expects 32
-  // and 1" open item) -- plus a bounded raw-frame capture as a safety net, since
-  // neither candidate is fully confirmed as THE discovery signal. All timestamps
-  // below are raw millis() (time since actual chip boot/reset), deliberately NOT
-  // time since this component's setup() ran -- see FujitsuClimate.h's
-  // get_setup_priority() note for why that distinction matters here. -1 means "not
-  // seen yet within the capture window".
-  int32_t getBootFirstFrameMs() const { return boot_first_frame_ms_; }
-  int32_t getBootCtrl3AltMs() const { return boot_ctrl3_alt_ms_; }
-  uint16_t getBootCtrl3AltCount() const { return boot_ctrl3_alt_count_; }
-  int32_t getBootUnitAddrAltMs() const { return boot_unit_addr_alt_ms_; }
-  uint16_t getBootUnitAddrAltCount() const { return boot_unit_addr_alt_count_; }
-  size_t getBootCaptureCount() const { return boot_capture_count_; }
-  bool isBootCaptureDumped() const { return boot_capture_dumped_; }
-  // Call roughly once a second (e.g. from FujitsuClimate::update()) -- a cheap no-op
-  // check until the boot window closes, then performs exactly one bounded log dump.
-  void maybeDumpBootCapture();
-
-  // --- Inter-frame timing instrumentation (added 14 Aug 2026, Phase 2 item 5 -- see
-  // protocol-review-and-next-experiments.md) ---
-  // `sendPendingFrame()`'s FRAME_REPLY_DELAY_MS (60ms) has been an untested guess since
-  // before this project's current maintainers touched it -- 3B.20/3B.21's null TX
-  // results were never actually checked against real measured bus timing. This
-  // instruments the two frame-boundary gaps in the live 16-byte UNIT+CTRL cycle
-  // directly: UNIT-end -> CTRL-start (expected ~0, same cycle, a sanity baseline) and
-  // CTRL-end -> next-UNIT-start (the "is there actually an idle window here at all"
-  // question -- if this is also ~0, i.e. continuous back-to-back traffic with no gap,
-  // that alone would explain the 3B.20/3B.21 null results regardless of what
-  // FRAME_REPLY_DELAY_MS is set to, since any TX attempt would land on top of live
-  // traffic no matter the delay). Unlike the boot/discovery-probe capture above, this
-  // doesn't depend on any boot-time event -- steady-state running bus traffic is
-  // exactly what's being measured, so the capture window can run from boot without
-  // needing a power cycle. Caveat: timestamps are taken when this component's
-  // readFrame() actually reads each byte out of the UART's software/hardware buffer,
-  // not exact wire-arrival time -- under normal conditions (loop() running frequently)
-  // these should track closely, but a stalled loop() could introduce noise. All
-  // microsecond-resolution since 500 baud puts byte times at ~2ms and gaps of interest
-  // could plausibly be well under a millisecond.
-  uint32_t getTimingUnitToCtrlCount() const { return unit_to_ctrl_gap_.count; }
-  uint32_t getTimingUnitToCtrlMinUs() const { return unit_to_ctrl_gap_.count ? unit_to_ctrl_gap_.min_us : 0; }
-  uint32_t getTimingUnitToCtrlMaxUs() const { return unit_to_ctrl_gap_.max_us; }
-  uint32_t getTimingUnitToCtrlAvgUs() const {
-    return unit_to_ctrl_gap_.count ? static_cast<uint32_t>(unit_to_ctrl_gap_.sum_us / unit_to_ctrl_gap_.count) : 0;
-  }
-  uint32_t getTimingCtrlToUnitCount() const { return ctrl_to_unit_gap_.count; }
-  uint32_t getTimingCtrlToUnitMinUs() const { return ctrl_to_unit_gap_.count ? ctrl_to_unit_gap_.min_us : 0; }
-  uint32_t getTimingCtrlToUnitMaxUs() const { return ctrl_to_unit_gap_.max_us; }
-  uint32_t getTimingCtrlToUnitAvgUs() const {
-    return ctrl_to_unit_gap_.count ? static_cast<uint32_t>(ctrl_to_unit_gap_.sum_us / ctrl_to_unit_gap_.count) : 0;
-  }
-  bool isTimingCaptureDumped() const { return timing_capture_dumped_; }
-  // Call roughly once a second (e.g. from FujitsuClimate::update()) -- a cheap no-op
-  // check until the capture window closes, then performs exactly one bounded log dump
-  // of the individual CTRL->UNIT gap samples (min/max/avg alone could hide a bimodal
-  // pattern, e.g. "most cycles have no gap but every Nth one does").
-  void maybeDumpTimingCapture();
-
-  // --- messageDest diagnostic (added 18 Aug 2026, continued -- see
-  // protocol-review-and-next-experiments.md's "real mechanism, confirmed from
-  // upstream source" addendum) ---
-  // Real upstream's FujiFrame struct decodes buf[1] as: bit7 = unknownBit (always
-  // set, per upstream's own "never worked out why" note), bits[6:0] = messageDest.
-  // Applying this project's already-validated 2-byte shift (corr frame[0..5] =
-  // inverted(UNIT[2..7])), frame[1] IS that byte -- already captured on every single
-  // live processCorrectedFrame() call, just never surfaced as messageDest before now.
-  // This matters because upstream's real waitForFrame() gates ALL transmission on
-  // having just seen a real incoming frame with messageDest == SECONDARY(33) -- every
-  // TX test this project has run (3B.20-3B.28) skipped that check and sent on manual
-  // command instead. The 3B.24 Dual-mode finding (raw UNIT[3] 0x7F->0x5E, i.e. this
-  // exact byte 0x80->0xA1) already decodes to precisely this: 0xA1 & 0x7F = 0x21 = 33
-  // = SECONDARY -- suggesting Dual mode may make this condition true continuously
-  // (every ~32ms cycle), not as a rare one-shot boot-time probe as originally framed.
-  // This diagnostic exists to confirm that directly and continuously, live, before
-  // building any reply logic that depends on it.
-  uint8_t getCorrMessageDest() const { return corr_message_dest_; }
-  bool getCorrUnknownBit() const { return corr_unknown_bit_; }
-  uint32_t getMessageDestTotalCount() const { return message_dest_total_count_; }
-  uint32_t getMessageDestSecondaryCount() const { return message_dest_secondary_count_; }
-  int32_t getMessageDestFirstSecondaryMs() const { return message_dest_first_secondary_ms_; }
-
-  // --- messageType/writeBit diagnostic (added 19 Aug 2026, 3B.33) ---
-  // Added after 3B.32's structurally-correct command (dest=UNIT, writeBit forced=1,
-  // controllerPresent forced=1, per upstream's real encodeFrame()) still didn't move
-  // the setpoint. Rather than guess a fourth time, this exposes the byte upstream
-  // calls messageType(bits[5:4])+writeBit(bit3) -- per this project's already-
-  // validated 2-byte-shift correspondence, this is corr frame[2] (inverted(UNIT[4])),
-  // the one byte in the corrected decode never yet surfaced as a live diagnostic
-  // (earlier notes only flagged it as "constant so far", which is consistent with
-  // every observed frame being an ordinary STATUS/writeBit=0 heartbeat -- exactly
-  // what should flip during a REAL command). Watching this live while a real command
-  // is sent from the WIRED remote (not the ESP32) gives ground truth on what an
-  // actually-accepted write looks like on this specific bus, instead of continuing to
-  // infer it from upstream's source alone.
-  uint8_t getCorrMessageType() const { return corr_message_type_; }
-  bool getCorrWriteBit() const { return corr_write_bit_; }
-
-  // --- Address-gated LOGIN-ack test (added 18 Aug 2026, continued -- see
-  // protocol-review-and-next-experiments.md's "real mechanism" addendum) ---
-  // Every TX test to date (3B.20-3B.28) built and sent a frame on manual command,
-  // never checking whether the indoor unit had actually addressed a frame to us
-  // first. Per real upstream source, that check is the entire mechanism: reply only
-  // when messageDest == SECONDARY(33) has just been observed, and the first such
-  // reply must be a LOGIN-acknowledgment (mirrors currentState, writeBit=0), not a
-  // command. armLoginAckTest() arms a one-shot flag; the next corrected-frame decode
-  // that reads messageDest==SECONDARY (per the diagnostic above, this reads 100% of
-  // frames in Dual mode, so in practice within ~1 cycle) builds exactly one
-  // LOGIN-ack frame via buildLoginAckFrame() and disarms. The actual send still goes
-  // through the existing, proven 3B.25 collision-free path (readFrame() sends
-  // immediately after the real CTRL frame ends) -- this only changes what triggers
-  // the arm, not how the send itself is timed.
-  void armLoginAckTest();
-
-  // --- Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31;
-  // REVISED 19 Aug 2026, 3B.32, after fetching upstream's actual source) ---
-  // 3B.31 sent cleanly (no bus fault) but did not move the setpoint. Cloning the real
-  // upstream (unreality/FujiHeatPump) source directly resolved two things 3B.31 had
-  // wrong, from decodeFrame()/encodeFrame()/waitForFrame():
-  //   1. writeBit -- lives in the SAME byte as messageType (bit3, 0b00001000 in
-  //      upstream's own indexing) and upstream ONLY sets it when a real field change
-  //      is pending (`if(updateFields) ff.writeBit = 1;`) -- every ordinary reply is
-  //      writeBit=0. 3B.31 never touched this byte at all (cloned from the template,
-  //      which always reads writeBit=0), so the "command" was structurally
-  //      indistinguishable from a heartbeat reply. This is the leading suspect for why
-  //      nothing stuck.
-  //   2. messageDest -- upstream's waitForFrame() uses dest=SECONDARY only when
-  //      replying to an incoming LOGIN-type frame (the buildLoginAckFrame() case
-  //      above). The ordinary steady-state reply -- the one that actually carries
-  //      writeBit and field changes -- replies with dest=UNIT(1) instead. 3B.31's
-  //      "every prior command test used dest=UNIT so let's try SECONDARY" reasoning
-  //      had it backwards: SECONDARY is for acknowledging a LOGIN frame specifically,
-  //      not for the general command-carrying reply. Since every frame this project
-  //      has observed addressed to us in Dual mode looks like ordinary STATUS traffic
-  //      (per processCorrectedFrame()'s "frame[2] constant" note), UNIT(1) is the
-  //      right destination for this reply, gated the same way as before (arms on the
-  //      next observed messageDest==SECONDARY frame) -- being addressed via
-  //      SECONDARY and replying via UNIT are two different, independently-correct
-  //      facts, not a contradiction.
-  void armStatusCommandTest(int delta_c);
-
-  // --- Minimal-clone command test (added 19 Aug 2026, 3B.36) ---
-  // 3B.35's multi-frame capture (4 CTRL frames before / 4 after a real power-on
-  // command) found the real wired controller's frame NEVER changes source/dest/type
-  // to command something -- every byte except the one field being changed (byte[5]
-  // for power/mode/fan) stayed identical to its rest value (source=START, dest=
-  // PRIMARY, messageType=STATUS/writeBit=0) across all 8 samples. Every TX test this
-  // project has ever run (3B.20-3B.35) declared a different messageSource/messageDest
-  // than these real rest values -- which, per this evidence, may be exactly why none
-  // of them were adopted, regardless of writeBit. This is the simplest command frame
-  // attempted all session: clone the real last_ctrl_raw_ template byte-for-byte, with
-  // NO identity/type changes at all, and edit only the setpoint byte (byte[6]). Gated
-  // and timed the same proven-safe way as every other test this session (arms on the
-  // next observed messageDest==SECONDARY frame, sent via the existing 3B.25
-  // CTRL->UNIT-gap path).
-  void armMinimalSetpointTest(int delta_c);
-
-  // --- Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) ---
-  // 3B.36 (exact clone, including source=START -- the master's own identity) sent
-  // and caused a real bus fault (E:EE) -- but every OTHER test this session that
-  // declared a DIFFERENT source (SECONDARY) sent perfectly cleanly using this exact
-  // same gating/timing. That isolates the likely cause to something more specific
-  // than "any injected frame risks collision": claiming to BE the master's own
-  // identity (source=START) a second time in the same cycle is what confuses the
-  // unit, not injecting an extra frame per se. This combines the two working pieces:
-  // 3B.35's finding (don't touch dest/messageType -- leave them at the real rest
-  // values, PRIMARY/STATUS, exactly as cloned) with declaring OUR OWN identity
-  // (source=SECONDARY(33), proven safe across five earlier tests tonight) instead of
-  // cloning the master's START. Same gating/timing as every other test this session.
-  void armMinimalSetpointOwnSourceTest(int delta_c);
-
-  // --- Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) ---
-  // Per James's direction: rather than continuing setpoint-based TX experiments
-  // (where success is hard to verify -- the corrected decode's own setpoint field is
-  // exactly what garbles during a bad collision), pivot the TX test target to mode
-  // and power. Both are the most solidly RX-decoded fields in the whole project
-  // (Session B validated them live against every button press, and they've never
-  // been wrong or stuck since), and mode/power are ALSO independently confirmable via
-  // switch.ac (a WeMo-backed device, entirely separate from this project's own bus
-  // decode) -- so a command's real-world effect can be checked two independent ways
-  // instead of relying solely on the ESP32's own read of itself. Both build functions
-  // below reuse the exact 3B.37 scaffold -- the only pattern that has sent cleanly
-  // every single time it's been tried (5/5 tests this project has run): clone the
-  // real last_ctrl_raw_ template verbatim, declare our own SECONDARY(33) identity in
-  // byte[2], leave dest (byte[3]) and messageType (byte[4]) untouched at their real
-  // captured rest values (3B.35's ground-truth finding), and edit only the one
-  // payload byte the test is actually about. That byte, per processCorrectedFrame()'s
-  // field layout, is raw CTRL byte[5] ("B5"): bit0=power, bits[3:1]=mode,
-  // bits[6:4]=fan -- the same byte buildFrame() already writes wholesale for the
-  // (never address-gated) general TX-test path. These two functions write only the
-  // relevant sub-field of that byte, preserving the other two sub-fields from the
-  // real captured template rather than reconstructing them from decoded state, to
-  // stay as close to "minimal clone" as the setpoint-only tests already established.
-  void armModeCommandTest(FujiMode mode);
-  void armPowerCommandTest(bool on);
-
- protected:
-  uart::UARTComponent *uart_{nullptr};
-  bool secondary_{true};
-  bool connected_{false};
-  bool debug_{false};
-
-  // Current state (from bus) -- NAN until first frame received. As of 3B.18, written
-  // by processCorrectedFrame() below, not by parseFrame()/parseCTRLFrame().
-  bool on_off_{false};
-  FujiMode mode_{FujiMode::MODE_AUTO};
-  float temperature_{NAN};
-  float current_temperature_{NAN};
-  FujiFanMode fan_mode_{FujiFanMode::FAN_AUTO};
-
-  // Pending changes flag
-  bool has_pending_frame_{false};
-
-  // Protocol sync state: after a valid unit frame, the very next 8 bytes are
-  // the ctrl frame regardless of start byte. This flag gates that acceptance.
-  bool expecting_ctrl_{false};
-
-  // Frame buffers
-  uint8_t rx_buffer_[32];
-  uint8_t tx_buffer_[32];
-  size_t rx_index_{0};
-
-  // Last real, unmodified CTRL frame captured off the bus (raw wire bytes, NOT
-  // inverted) -- added for Phase 2 TX work, 11 Aug 2026. buildFrame() copies this as
-  // its starting template rather than constructing a frame from scratch, per
-  // plan-to-completion.md's Phase 2 approach ("the CTRL frame is the wired
-  // controller's own frame, so as a secondary controller the ESP32 should emit that
-  // shape"). Populated in readFrame() whenever a structurally valid CTRL frame is
-  // seen -- independent of hardware_present_/decode state, so it's available as soon
-  // as any real CTRL frame has been observed.
-  uint8_t last_ctrl_raw_[FRAME_LENGTH]{};
-  bool have_last_ctrl_raw_{false};
-
-  // --- Boot/discovery-probe instrumentation (added 14 Aug 2026) -- see the public
-  // getters above and FujiHeatPump.cpp's recordBootProbe_()/maybeDumpBootCapture()
-  // for the full explanation. Bounded to BOOT_CAPTURE_WINDOW_MS so this can never
-  // become a sustained hot-path logging cost like the crash-loop/overrun bugs this
-  // codebase already had to fix once each (see readFrame()'s log_details comments).
-  static const uint32_t BOOT_CAPTURE_WINDOW_MS = 12000;  // 12s -- comfortable margin over the ~4s probe
-  static const size_t BOOT_CAPTURE_MAX = 500;            // ~12s at the observed ~32 valid-frames/sec rate
-  struct BootCaptureEntry {
-    uint32_t t_ms;
-    bool is_ctrl;
-    uint8_t bytes[FRAME_LENGTH];
-  };
-  BootCaptureEntry boot_capture_[BOOT_CAPTURE_MAX];
-  size_t boot_capture_count_{0};
-  bool boot_capture_dumped_{false};
-  int32_t boot_first_frame_ms_{-1};
-  int32_t boot_ctrl3_alt_ms_{-1};
-  uint16_t boot_ctrl3_alt_count_{0};
-  int32_t boot_unit_addr_alt_ms_{-1};
-  uint16_t boot_unit_addr_alt_count_{0};
-  void recordBootProbe_(const uint8_t *frame, bool is_ctrl);
-
-  // --- Inter-frame timing instrumentation (added 14 Aug 2026) -- see the public
-  // getters above and FujiHeatPump.cpp's recordFrameTiming_()/maybeDumpTimingCapture()
-  // for the full explanation.
-  static const uint32_t TIMING_CAPTURE_WINDOW_MS = 15000;  // 15s of steady-state running, no power cycle needed
-  static const size_t TIMING_SAMPLE_MAX = 60;  // bounded raw CTRL->UNIT gap samples, ~15s at the observed cycle rate
-  struct GapStats {
-    uint32_t count{0};
-    uint32_t min_us{0xFFFFFFFFu};  // avoids relying on UINT32_MAX's macro/header availability
-    uint32_t max_us{0};
-    uint64_t sum_us{0};
-  };
-  GapStats unit_to_ctrl_gap_;
-  GapStats ctrl_to_unit_gap_;
-  uint32_t ctrl_to_unit_samples_us_[TIMING_SAMPLE_MAX];
-  size_t ctrl_to_unit_sample_count_{0};
-  bool timing_capture_dumped_{false};
-  uint32_t frame_start_us_{0};       // micros() at the first byte of the frame currently being assembled
-  uint32_t prev_frame_end_us_{0};    // micros() at completion of the last valid frame (UNIT or CTRL)
-  bool have_prev_frame_end_{false};
-  bool prev_frame_was_ctrl_{false};
-  void recordFrameTiming_(bool is_ctrl);
-
-  // Parse received frames -- retained for frame-structure sync (used by the Bus
-  // Alive/Bus Status diagnostics) and for legacy debug logging. As of 3B.18 these no
-  // longer write on_off_/mode_/temperature_/fan_mode_ -- see processCorrectedFrame().
-  // log_details gates the expensive per-frame ESP_LOGD/LOGI dumps (see readFrame()) --
-  // added 10 Aug 2026 after real live-bus traffic showed these firing on every single
-  // frame (several times/sec) caused sustained 65-85ms component-loop overruns, once a
-  // 527ms spike. Frame-structure sync itself always runs regardless of log_details.
-  void parseFrame(const uint8_t *frame, size_t len, bool log_details);      // UNIT frame (FE...6B)
-  void parseCTRLFrame(const uint8_t *frame, size_t len, bool log_details);  // CTRL frame (??...4B)
-
-  // Build transmit frame
-  void buildFrame();
-  // Build a pure LOGIN-type announcement frame (no command payload) -- see
-  // armLoginHandshake() above.
-  void buildLoginFrame();
-  int32_t login_burst_remaining_{0};
-
-  // Address-gated LOGIN-ack test (added 18 Aug 2026, continued) -- see
-  // armLoginAckTest() above for the full reasoning. Unlike buildLoginFrame() (dest=
-  // UNIT(1), the "announce myself to the unit" guess every prior LOGIN test used),
-  // this builds the reply upstream's real source actually specifies for a LOGIN-type
-  // frame addressed to us: dest=SECONDARY(33) (mirrors back into the same slot we
-  // were addressed in) and controllerPresent forced to 1, everything else (on/off,
-  // mode, fan, setpoint, economy, room temp) mirrored unchanged from the last real
-  // frame -- a true "yes, I'm here" acknowledgment, not a command.
-  void buildLoginAckFrame();
-  bool login_ack_test_armed_{false};
-
-  // Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) -- see
-  // armStatusCommandTest() above.
-  void buildStatusCommandFrame(int delta_c);
-  bool status_command_test_armed_{false};
-  int status_command_delta_c_{0};
-
-  // Minimal-clone command test (added 19 Aug 2026, 3B.36) -- see
-  // armMinimalSetpointTest() above.
-  void buildMinimalSetpointFrame(int delta_c);
-  bool minimal_setpoint_test_armed_{false};
-  int minimal_setpoint_delta_c_{0};
-
-  // Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) -- see
-  // armMinimalSetpointOwnSourceTest() above.
-  void buildMinimalSetpointOwnSourceFrame(int delta_c);
-  bool minimal_setpoint_own_source_test_armed_{false};
-  int minimal_setpoint_own_source_delta_c_{0};
-
-  // Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) -- see
-  // armModeCommandTest()/armPowerCommandTest() above.
-  void buildModeCommandFrame(FujiMode mode);
-  void buildPowerCommandFrame(bool on);
-  bool mode_command_test_armed_{false};
-  FujiMode mode_command_target_{FujiMode::MODE_AUTO};
-  bool power_command_test_armed_{false};
-  bool power_command_target_{false};
-
-  // Timing
-  uint32_t last_frame_time_{0};
-  uint32_t last_any_byte_time_{0};  // set on every raw byte, regardless of validity (added 10 Aug 2026)
-  uint32_t debug_log_last_ms_{0};  // throttles the per-frame debug/info dumps to 1/sec (added 10 Aug 2026)
-  // No longer used as of 3B.25 (18 Aug 2026) -- sendPendingFrame() is now triggered
-  // directly from readFrame() right after a real CTRL frame, timed to the measured
-  // CTRL->UNIT gap instead of this fixed post-hoc delay. Left declared for the
-  // history/reasoning trail in the comments referencing it.
-  static const uint32_t FRAME_REPLY_DELAY_MS = 60;  // Reply 50-60ms after receiving
-
-  // --- Corrected decode (added 10 Aug 2026, Session A; promoted to primary 11 Aug
-  // 2026, 3B.18) ---
-  // Hypothesis from comparing this project against other published Fujitsu LIN
-  // implementations (see project notes: upstream-comparison.md): every byte on the
-  // wire is inverted relative to how the old decode above reads it, and the meaningful
-  // 8-byte field window starts 2 bytes after the raw 0xFE sync byte, not at it. Session
-  // B (10-11 Aug 2026) validated this live against real button presses for power,
-  // mode (all 5), fan speed (4 of 5), setpoint, and economy -- all correct, while the
-  // old decode above was wrong or stuck on every one of them. It now feeds
-  // on_off_/mode_/temperature_/current_temperature_/fan_mode_ directly (see
-  // processCorrectedFrame()) and is also mirrored to standalone diagnostic HA entities
-  // for cross-checking.
-  //
-  // Byte mapping to the raw 16-byte UNIT+CTRL wire cycle (worked out 11 Aug 2026 for
-  // Phase 2 TX -- this window straddles the frame boundary, it is NOT just the UNIT
-  // frame): corr frame[0..5] = inverted(UNIT[2..7]), corr frame[6..7] =
-  // inverted(CTRL[0..1]). So UNIT[5] ("B5") == inverted frame[3], UNIT[6] ("B6") ==
-  // inverted frame[4], and CTRL[0] ("C0") == inverted frame[6]. This is how
-  // buildFrame() below maps its writes back onto raw CTRL bytes 5 and 6.
-  enum class CorrSyncState : uint8_t { SEEK_FE, SKIP_ONE, CAPTURE };
-  CorrSyncState corr_state_{CorrSyncState::SEEK_FE};
-  uint8_t corr_buf_[8];
-  uint8_t corr_index_{0};
-  uint32_t corr_last_log_ms_{0};  // throttle experimental logging (added 10 Aug 2026, post-crash-loop fix)
-  uint8_t corr_mode_raw_{0xFF};    // last decoded corrected-mode value; 0xFF = none yet
-  uint8_t corr_fan_raw_{0xFF};     // last decoded corrected-fan value; 0xFF = none yet
-  uint32_t corr_last_update_ms_{0};  // millis() of the last corrected-frame decode
-  uint8_t corr_setpoint_raw_{0};   // last decoded corrected setpoint, degC (0 = none, e.g. FAN mode)
-  uint8_t corr_room_temp_raw_{0};  // last decoded corrected room/controller temp, degC
-  bool corr_economy_{false};       // last decoded corrected economy-mode flag
-  bool corr_mystery_bit_{false};  // frame[6] bit0 -- see getCorrMysteryBit() comment above
-
-  // --- messageDest diagnostic (added 18 Aug 2026, continued) -- see the public
-  // getters above for the full explanation. corr_message_dest_ is 0xFF until the
-  // first corrected frame is decoded (mirrors the corr_mode_raw_/corr_fan_raw_
-  // "none yet" convention); thereafter it's always a real 0-127 value every cycle.
-  uint8_t corr_message_dest_{0xFF};  // frame[1] & 0x7F
-  bool corr_unknown_bit_{false};     // frame[1] bit7
-  uint32_t message_dest_total_count_{0};      // total corrected frames decoded
-  uint32_t message_dest_secondary_count_{0};  // of which messageDest == SECONDARY(33)
-  int32_t message_dest_first_secondary_ms_{-1};  // millis() of the first such sighting
-
-  // --- messageType/writeBit diagnostic (added 19 Aug 2026, 3B.33) -- see the public
-  // getters above for the full reasoning.
-  uint8_t corr_message_type_{0xFF};  // frame[2] bits[5:4]; 0xFF = none decoded yet
-  bool corr_write_bit_{false};       // frame[2] bit3
-  // Edge-detect state (added 19 Aug 2026, 3B.34) -- see processCorrectedFrame()'s
-  // writeBit rising-edge log. Unconditional (not throttled to 1/sec like the regular
-  // CORR debug line) specifically so a real write -- a rare, one-shot pulse -- can
-  // never fall in the gap between throttled samples the way the 12:20:29 capture's
-  // power-off/on toggle did.
-  bool prev_corr_write_bit_{false};
-
-  // --- Multi-frame CTRL capture around a real write (added 19 Aug 2026, 3B.35) ---
-  // The single-snapshot writeBit-edge capture (3B.34) showed the real CTRL frame at
-  // that instant sitting at its ordinary rest values (source=START, dest=PRIMARY,
-  // messageType/writeBit=STATUS/0) -- surprising enough (and easy enough to be a
-  // one-cycle timing artifact) that it's worth confirming with several frames of
-  // context either side, not just one. Small bounded ring buffer of raw CTRL frames,
-  // always kept warm (cheap -- just a memcpy per real CTRL frame), so "before" frames
-  // are already available the instant a write edge fires; "after" frames are then
-  // captured for a few more cycles post-trigger. Same self-limiting,
-  // bounded-capture-window pattern as the existing boot/timing instrumentation above.
-  static const size_t CTRL_RING_SIZE = 4;
-  uint8_t ctrl_ring_[CTRL_RING_SIZE][FRAME_LENGTH]{};
-  size_t ctrl_ring_pos_{0};
-  bool ctrl_ring_full_{false};
-  bool write_capture_active_{false};
-  int write_capture_after_remaining_{0};
-  void recordCtrlRing_(const uint8_t *frame);
-  void dumpWriteCapture_(uint8_t setpoint_raw, uint8_t mode, uint8_t fan, bool pwr);
-
-  void feedCorrectedSync(uint8_t raw_byte);
-  void processCorrectedFrame(const uint8_t *frame);
+  bool debugPrint = false;
 };
 
-}  // namespace fujitsu_climate
-}  // namespace esphome
+enum class FujiMode : byte { UNKNOWN = 0, FAN = 1, DRY = 2, COOL = 3, HEAT = 4, AUTO = 5 };
+
+enum class FujiMessageType : byte {
+  STATUS = 0,
+  ERROR = 1,
+  LOGIN = 2,
+  UNKNOWN = 3,
+};
+
+enum class FujiAddress : byte {
+  START = 0,
+  UNIT = 1,
+  PRIMARY = 32,
+  SECONDARY = 33,
+};
+
+enum class FujiFanMode : byte {
+  FAN_AUTO = 0,
+  FAN_QUIET = 1,
+  FAN_LOW = 2,
+  FAN_MEDIUM = 3,
+  FAN_HIGH = 4
+};
+
+const byte kOnOffUpdateMask = 0b10000000;
+const byte kTempUpdateMask = 0b01000000;
+const byte kModeUpdateMask = 0b00100000;
+const byte kFanModeUpdateMask = 0b00010000;
+const byte kEconomyModeUpdateMask = 0b00001000;
+const byte kSwingModeUpdateMask = 0b00000100;
+const byte kSwingStepUpdateMask = 0b00000010;
