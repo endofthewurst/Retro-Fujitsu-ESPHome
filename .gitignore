@@ -6,3 +6,9 @@
 **/__pycache__/
 **/*.pyc
 _codeql_detected_source_root
+
+# Debug/scratch logs from dev sessions (compile/OTA/tx capture logs)
+*.log
+compile_log.txt
+upload_log.txt
+

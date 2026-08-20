@@ -9,11 +9,11 @@ CONF_FUJITSU_CLIMATE_ID = "fujitsu_climate_id"
 CONF_CORRECTED_SETPOINT = "corrected_setpoint"
 CONF_CORRECTED_ROOM_TEMP = "corrected_room_temp"
 
-# Added 11 Aug 2026, 3B.18 -- these were text_sensors ("22C" / "None") until now; the
-# underlying protocol field is a plain integer number of whole degrees C (see the
-# frame layout comment in FujiHeatPump.cpp's processCorrectedFrame()), so a proper
-# numeric sensor with accuracy_decimals=0 is the correct representation and lets HA
-# graph/history these instead of just displaying a string.
+# Underlying protocol field is a plain integer number of whole degrees C -- see
+# hardware-and-protocol.md -- so a numeric sensor with accuracy_decimals=0 is the
+# correct representation. Unchanged from the pre-Phase-4 version; now sourced from
+# the vendored engine's FujiFrame.temperature/controllerTemp instead of the old
+# hand-rolled corr_setpoint_raw_/corr_room_temp_raw_ fields.
 _TEMP_SCHEMA = sensor.sensor_schema(
     unit_of_measurement=UNIT_CELSIUS,
     accuracy_decimals=0,

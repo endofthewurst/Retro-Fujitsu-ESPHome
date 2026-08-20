@@ -1,18 +1,42 @@
-# Phase 3B: Fujitsu Protocol Integration - LISTEN MODE (hardware wired)
-# ESP32 connected as secondary slave on LIN bus via TJA1021/SIT1021T
-# UART on GPIO16 (RX) / GPIO17 (TX), 500 baud 8N1
-# Goal: capture and decode all bus traffic to build protocol map
+# Phase 4: Vendored-engine rebuild (19 Aug 2026)
+# ESP32 connected as a SECONDARY (slave) controller on the Fujitsu LIN bus, via a
+# TJA1021/SIT1021T (LIN3TL) transceiver, alongside the existing wired UTY-RNNUM
+# controller (which stays in place and remains fully capable of operating the system
+# on its own -- see hardware-and-protocol.md's "ESP32 is never the boss" principle).
+#
+# This version replaces the project's own hand-rolled protocol engine with
+# unreality/FujiHeatPump (https://github.com/unreality/FujiHeatPump, MIT licensed),
+# vendored into components/fujitsu_climate/FujiHeatPump.{h,cpp}, wrapped in a rebuilt
+# ESPHome component modelled on the reference esphome-fujitsu integration -- a
+# dedicated FreeRTOS task doing the bus I/O, decoupled from ESPHome's own loop and
+# WiFi/API traffic, replying automatically and continuously to every frame addressed
+# to us instead of only on a manually-armed test button press. Full reasoning:
+# tx-architecture-review-and-adoption-plan.md.
+#
+# UART on GPIO16 (RX) / GPIO17 (TX), 500 baud 8E1 -- now owned directly by the
+# vendored engine via Serial2 (FujiHeatPump::connect()), not ESPHome's uart:
+# component; see climate.py's rx_pin/tx_pin config.
+#
+# Live control (climate.control()) is wired to the real bus. It's gated behind the
+# "Aircon Control Enabled" switch below -- per hardware-and-protocol.md's "ESP32 is
+# never the boss" principle, that switch (not this default) is what keeps a person
+# able to force the system back to read-only from HA or the web UI at any time.
+# 20 Aug 2026, at James's explicit request: this now defaults to ON (restore_mode:
+# ALWAYS_ON) instead of ALWAYS_OFF -- command adoption was confirmed working the same
+# day (state-of-play.md's "4A.1" section) after a locking hardening pass following a
+# crash, so this is a considered change, not an oversight. Flip it off in HA/the web
+# UI any time you want read-only monitoring (e.g. while testing new firmware).
 
 esphome:
   name: aircon
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "3B.37"
+    version: "4A.2"
   on_boot:
     priority: 600
     then:
-      - logger.log: "Fujitsu Phase 3B - Listen Mode (hardware wired)"
+      - logger.log: "Fujitsu Phase 4 - vendored engine, continuous secondary-controller reply loop"
       - light.turn_on:
           id: status_light
           brightness: 100%
@@ -23,34 +47,16 @@ esp32:
   framework:
     type: arduino
 
-# Logging: dropped from VERBOSE to DEBUG 11 Aug 2026 (3B.18). VERBOSE compiled in an
-# unconditional per-byte ESP_LOGV in FujiHeatPump::readFrame() that fired on every
-# single byte of continuous bus traffic (~50/sec) -- a real hot-path cost, same class
-# of problem as the earlier crash-loop fix, worth removing regardless -- but it did
-# NOT turn out to be the whole story behind the Bus Alive flicker; see
-# FujitsuClimate.h's BUS_FRAME_TIMEOUT_MS comment (3B.19) for what happened next.
+# Logging: "fujitsu.heatpump" tag retired -- the vendored FujiHeatPump.cpp is upstream
+# code as-is and logs via Serial.printf() (gated by FujiHeatPump::debugPrint, off by
+# default -- see FujitsuClimate::setup()) rather than ESPHome's logger, so there's no
+# ESP_LOG tag for it to filter on any more. "fujitsu.climate" (this project's own
+# wrapper) still uses ESP_LOG normally.
 logger:
   level: DEBUG
   baud_rate: 115200
   logs:
-    fujitsu.heatpump: DEBUG
     fujitsu.climate: DEBUG
-    uart: WARN
-
-# UART for LIN bus communication via TJA1021/SIT1021T transceiver
-# Pull-up on RX pin prevents the floating-pin crash when not wired to bus
-uart:
-  id: fuji_uart
-  tx_pin: GPIO17
-  rx_pin:
-    number: GPIO16
-    mode:
-      input: true
-      pullup: true   # Critical: prevents RX float -> garbage bytes -> crash when bus disconnected
-  baud_rate: 500
-  data_bits: 8
-  parity: EVEN  # 3B.21: switched from NONE (8N1) to EVEN (8E1) - upstream requires 8E1 for TX, testing whether this unblocks the 3B.20 null TX result
-  stop_bits: 1
 
 # WiFi
 wifi:
@@ -111,12 +117,15 @@ external_components:
     components: [ fujitsu_climate ]
     refresh: 0s
 
-# Fujitsu Climate Entity
+# Fujitsu Climate Entity -- rx_pin/tx_pin replace the old uart_id (see climate.py);
+# defaults (16/17) match this project's known wiring, spelled out explicitly here for
+# clarity.
 climate:
   - platform: fujitsu_climate
     name: "Fujitsu Heat Pump"
     id: fujitsu_hp
-    uart_id: fuji_uart
+    rx_pin: 16
+    tx_pin: 17
 
 # Status LED with patterns
 light:
@@ -191,6 +200,9 @@ sensor:
     update_interval: 60s
     entity_category: diagnostic
 
+  # Unchanged entity ids from the pre-Phase-4 version, so existing HA history/
+  # automations referencing these keep working -- now sourced from the vendored
+  # engine's decode instead of the old hand-rolled one.
   - platform: fujitsu_climate
     fujitsu_climate_id: fujitsu_hp
     corrected_setpoint:
@@ -199,6 +211,79 @@ sensor:
     corrected_room_temp:
       name: "Room Temp"
       id: corrected_room_temp
+
+# Settable setpoint, independent of the climate entity's own target_temperature.
+# 20 Aug 2026 -- added because Home Assistant's own ESPHome climate integration
+# unconditionally hides target_temperature whenever the climate entity's hvac_mode is
+# "auto" for any device that doesn't support a two-point (low/high) target range --
+# see homeassistant/components/esphome/climate.py's target_temperature property. This
+# is confirmed live on this device: the ESPHome web UI and the ESP32's own web_server
+# REST API both show a real, correct target_temperature in Auto mode (e.g. 18C), but
+# Home Assistant's climate.aircon_fujitsu_heat_pump entity reports "temperature": null
+# for that exact same value at the exact same moment, purely because of HA's own
+# Auto-mode special-casing -- it is not a decode bug in this firmware, and there is no
+# firmware-side fix that changes HA's behaviour here (two-point mode doesn't help --
+# HA nulls target_temperature_low/high for Auto too). This number entity reads/writes
+# the same underlying value via the climate entity's own make_call(), so it is visible
+# and settable in HA (and the web UI) in every mode, including Auto.
+number:
+  - platform: template
+    name: "Set Temperature"
+    id: fujitsu_set_temperature
+    icon: "mdi:thermometer"
+    entity_category: config
+    min_value: 16
+    max_value: 30
+    step: 1
+    update_interval: 5s
+    lambda: |-
+      if (std::isnan(id(fujitsu_hp).target_temperature))
+        return {};
+      return id(fujitsu_hp).target_temperature;
+    set_action:
+      - lambda: |-
+          id(fujitsu_hp).make_call().set_target_temperature(x).perform();
+
+# Settable fan speed, independent of the climate entity's own fan_mode selector.
+# 20 Aug 2026 -- added because the ESPHome web UI's climate row only exposes
+# Target/Mode, not fan mode (confirmed live: HA's climate card shows a fan-speed
+# selector via the climate entity's own supported_fan_modes, but the same control is
+# absent from the web UI's rendering of that same entity). This select gives the web
+# UI a working, visible fan-speed control mirroring the one HA already has, via the
+# same climate make_call() path control() already gates behind "Aircon Control
+# Enabled".
+select:
+  - platform: template
+    name: "Fan Speed"
+    id: fujitsu_fan_speed
+    icon: "mdi:fan"
+    entity_category: config
+    update_interval: 5s
+    options:
+      - "Auto"
+      - "Quiet"
+      - "Low"
+      - "Medium"
+      - "High"
+    lambda: |-
+      if (!id(fujitsu_hp).fan_mode.has_value())
+        return {};
+      switch (id(fujitsu_hp).fan_mode.value()) {
+        case climate::CLIMATE_FAN_AUTO: return std::string("Auto");
+        case climate::CLIMATE_FAN_QUIET: return std::string("Quiet");
+        case climate::CLIMATE_FAN_LOW: return std::string("Low");
+        case climate::CLIMATE_FAN_MEDIUM: return std::string("Medium");
+        case climate::CLIMATE_FAN_HIGH: return std::string("High");
+        default: return {};
+      }
+    set_action:
+      - lambda: |-
+          climate::ClimateFanMode m = climate::CLIMATE_FAN_AUTO;
+          if (x == "Quiet") m = climate::CLIMATE_FAN_QUIET;
+          else if (x == "Low") m = climate::CLIMATE_FAN_LOW;
+          else if (x == "Medium") m = climate::CLIMATE_FAN_MEDIUM;
+          else if (x == "High") m = climate::CLIMATE_FAN_HIGH;
+          id(fujitsu_hp).make_call().set_fan_mode(m).perform();
 
 # Text sensors
 text_sensor:
@@ -214,35 +299,31 @@ text_sensor:
   - platform: version
     name: "ESPHome Version"
 
+  # Plain-text link to the project repo, visible from both HA and the web UI (see
+  # state-of-play.md and hardware-and-protocol.md for the fuller project docs, which
+  # live in the project, not the repo). ESPHome's built-in web_server doesn't support
+  # a clickable hyperlink here -- this is the URL as text, selectable/copyable in
+  # both places. In Home Assistant you can additionally set a card's tap_action to
+  # "url" against this entity if you want a one-tap open; that's a dashboard-side
+  # change, not a firmware one, so it isn't set here.
+  - platform: template
+    name: "GitHub Repository"
+    icon: "mdi:github"
+    entity_category: diagnostic
+    lambda: |-
+      return std::string("https://github.com/endofthewurst/Retro-Fujitsu-ESPHome");
+
+  # Trimmed to bus_status in Phase 4 -- see components/fujitsu_climate/text_sensor.py
+  # for why the other exploratory diagnostics were retired. thermo_sensor re-added
+  # 20 Aug 2026, explicitly labelled unconfirmed -- see text_sensor.py's comment.
   - platform: fujitsu_climate
     fujitsu_climate_id: fujitsu_hp
     bus_status:
       name: "Bus Status"
       id: bus_status
-    corrected_mode:
-      name: "Mode"
-      id: corrected_mode
-    corrected_fan_raw:
-      name: "Fan"
-      id: corrected_fan_raw
-    corrected_economy:
-      name: "Economy"
-      id: corrected_economy
-    mystery_bit:
-      name: "Mystery Bit"
-      id: mystery_bit
-    message_dest:
-      name: "Message Dest"
-      id: message_dest
-    message_type:
-      name: "Message Type"
-      id: message_type
-    boot_probe:
-      name: "Boot Probe"
-      id: boot_probe
-    frame_timing:
-      name: "Frame Timing"
-      id: frame_timing
+    thermo_sensor:
+      name: "Thermo Sensor (unconfirmed)"
+      id: thermo_sensor
 
 # Binary sensors
 binary_sensor:
@@ -262,173 +343,30 @@ switch:
   - platform: restart
     name: "Restart"
 
+  # Kill switch for live control (added Phase 4) -- hardware-and-protocol.md's "ESP32
+  # is never the boss" design principle. climate.control() ignores every HA command
+  # unless this is on. 20 Aug 2026, at James's explicit request: restore_mode changed
+  # from ALWAYS_OFF to ALWAYS_ON, so live control is armed by default after every
+  # boot/OTA/crash rather than requiring it to be flipped on each session. This
+  # switch is still the safety override -- flip it off any time (from HA or the web
+  # UI) to force the system back to read-only without touching hardware.
+  - platform: template
+    name: "Aircon Control Enabled"
+    id: aircon_control_enabled
+    icon: "mdi:lock-open-alert-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: ALWAYS_ON
+    turn_on_action:
+      - lambda: 'id(fujitsu_hp)->set_control_enabled(true);'
+    turn_off_action:
+      - lambda: 'id(fujitsu_hp)->set_control_enabled(false);'
+
 # Buttons
 button:
   - platform: safe_mode
     name: "Safe Mode Boot"
     entity_category: diagnostic
-
-  # Phase 2 TX test buttons (added 11 Aug 2026, 3B.20) -- deliberately separate from
-  # the main climate entity's control() (still read-only, see FujitsuClimate.cpp).
-  # Each press sends exactly ONE command frame built from the validated
-  # corrected-decode field layout, per plan-to-completion.md Phase 2's required test
-  # order: setpoint first (smallest, most reversible change), checked against the
-  # physical wall unit after every single press -- not fan/mode/power yet, those come
-  # after setpoint is confirmed working (or definitively not).
-  - platform: template
-    name: "TX Test: Setpoint +1"
-    id: tx_test_setpoint_up
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_setpoint_step(1);
-
-  - platform: template
-    name: "TX Test: Setpoint -1"
-    id: tx_test_setpoint_down
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_setpoint_step(-1);
-
-  # Login handshake test (added 18 Aug 2026, 3B.27) -- sends a burst of 3 pure
-  # LOGIN-type frames (no command payload), one per bus cycle. See
-  # protocol-review-and-next-experiments.md for why.
-  - platform: template
-    name: "TX Test: Login Handshake"
-    id: tx_test_login_handshake
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_login_handshake();
-
-  # Address-gated LOGIN-ack test (added 18 Aug 2026, continued, 3B.29) -- see
-  # protocol-review-and-next-experiments.md's "real mechanism" addendum. Arms a
-  # one-shot reply that fires on the next observed messageDest==SECONDARY frame,
-  # instead of sending on this button press directly.
-  - platform: template
-    name: "TX Test: Login Ack (address-gated)"
-    id: tx_test_login_ack
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_login_ack();
-
-  # Address-gated STATUS command test (added 18 Aug 2026, continued, 3B.31) -- the
-  # actual TX test: a real setpoint change, gated on being addressed, using
-  # dest=SECONDARY per the 3B.30 LOGIN-ack result. See
-  # protocol-review-and-next-experiments.md for the full reasoning.
-  - platform: template
-    name: "TX Test: Setpoint +1 (address-gated)"
-    id: tx_test_setpoint_gated
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_status_command(1);
-
-  # Minimal-clone command test (added 19 Aug 2026, 3B.36) -- see
-  # protocol-review-and-next-experiments.md for the full reasoning: 3B.35's multi-frame
-  # capture showed the real controller never changes source/dest/type to command
-  # something, only the relevant payload byte. This clones the real frame verbatim and
-  # edits only the setpoint byte.
-  - platform: template
-    name: "TX Test: Setpoint +1 (minimal clone)"
-    id: tx_test_setpoint_minimal
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_minimal_setpoint(1);
-
-  # Minimal-clone, own-identity command test (added 19 Aug 2026, 3B.37) -- see
-  # protocol-review-and-next-experiments.md. 3B.36 (exact clone incl. source=START)
-  # faulted; this keeps dest/messageType untouched (3B.35's finding) but declares our
-  # own SECONDARY identity instead of cloning the master's START.
-  - platform: template
-    name: "TX Test: Setpoint +1 (minimal clone, own source)"
-    id: tx_test_setpoint_minimal_own_source
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_minimal_setpoint_own_source(1);
-
-  # Address-gated mode/power command tests (added 19 Aug 2026, 3B.38) -- TX test
-  # target pivoted from setpoint to mode/power per James's direction: both are
-  # solidly RX-decoded (never wrong/stuck since Session B) and independently
-  # checkable via switch.ac, so success/failure is far less ambiguous than setpoint,
-  # whose own decode is what garbles during a bad TX collision. Same proven-safe
-  # 3B.37 scaffold (own SECONDARY identity, dest/type untouched) -- only the mode/
-  # power sub-field of byte[5] is edited. Verify these via switch.ac AND
-  # sensor.house_aircon_mode / climate.aircon_fujitsu_heat_pump -- two independent
-  # read paths, not just the ESP32's own decode of itself.
-  - platform: template
-    name: "TX Test: Power On (gated)"
-    id: tx_test_power_on
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_power_command(true);
-
-  - platform: template
-    name: "TX Test: Power Off (gated)"
-    id: tx_test_power_off
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_power_command(false);
-
-  - platform: template
-    name: "TX Test: Mode Auto (gated)"
-    id: tx_test_mode_auto
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::MODE_AUTO);
-
-  - platform: template
-    name: "TX Test: Mode Cool (gated)"
-    id: tx_test_mode_cool
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::COOL);
-
-  - platform: template
-    name: "TX Test: Mode Dry (gated)"
-    id: tx_test_mode_dry
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::DRY);
-
-  - platform: template
-    name: "TX Test: Mode Fan (gated)"
-    id: tx_test_mode_fan
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::FAN);
-
-  - platform: template
-    name: "TX Test: Mode Heat (gated)"
-    id: tx_test_mode_heat
-    icon: "mdi:flask-outline"
-    entity_category: diagnostic
-    on_press:
-      - lambda: |-
-          id(fujitsu_hp)->test_mode_command(esphome::fujitsu_climate::FujiMode::HEAT);
 
 # Diagnostic interval
 interval:
