@@ -77,38 +77,59 @@ path.
 
 ## Features
 
+> **Note, 2 September 2026:** this section badly lagged the project's actual progress —
+> it still described the original ~29 April bring-up. Fan speed, current (room)
+> temperature, and the HEAT/AUTO target-temperature gap were all resolved back in August
+> (see `PROTOCOL.md`'s revision notes), and control from Home Assistant has since been
+> adopted from a vendored upstream engine and confirmed working live for several fields.
+> Updated below to match; see the project's own `hardware-and-protocol.md` and
+> `state-of-play.md` for the full, current picture.
+
 ### Confirmed and working
-- **State decode** — Power, Mode, and Target Temperature read correctly off the bus and
-  published to Home Assistant as a climate entity (see caveats below for HEAT/AUTO).
-- **Diagnostic sensors** — IP address, WiFi signal strength, uptime, free heap.
-- **Status LED** — Visual feedback on the ESP32 board (GPIO2).
+- **State decode** — Power, Mode, Target Temperature (all modes, including HEAT/AUTO),
+  **Fan Speed**, current (room) temperature, and Economy mode all read correctly off the
+  bus and published to Home Assistant as a climate entity (plus dedicated diagnostic
+  sensors/entities for several of them).
+- **Fan Speed** — decoded and live-confirmed: Auto=0, Low=2, Medium=3, High=4 (Quiet=1
+  inferred from enum spacing, not independently button-tested). Exposed both via the
+  climate entity's `fan_mode` and a dedicated HA `select` entity.
+- **Control from Home Assistant** — power, mode, target temperature, fan speed, and
+  Economy mode have all been exercised live via the HA API against the real unit, gated
+  behind an explicit, default-off "Aircon Control Enabled" kill switch. See
+  `state-of-play.md`'s "4A" sessions for the live-confirmation history of each field.
+- **Diagnostic sensors** — IP address, WiFi signal strength, uptime, free heap, bus
+  status/alive, status LED pattern.
+- **Status LED** — Visual feedback on the ESP32 board (GPIO2); read-only diagnostic, not
+  a controllable entity.
 - **Web interface** — ESPHome's built-in web server for local access.
 - **Non-invasive installation** — connects as a secondary (slave) controller; the existing
   wired controller keeps working normally, with no modification to the heat pump or the controller.
 
 ### Experimental / in progress
-- **Control from Home Assistant** — the climate entity accepts commands (power, mode,
-  temperature, fan) and the firmware has scaffolding to build and transmit a frame in
-  response, but the frame-building logic is **unvalidated and explicitly marked as a guess
-  in the source**. Don't rely on it to actually change the heat pump's behaviour yet.
-- **Fan speed** — not currently decoded or published.
-- **Current (room) temperature** — not currently decoded or published.
+- **Swing** — decoded upstream in principle (see `PROTOCOL.md`) but not live-tested on
+  this unit.
+- **The wired controller's "Thermo Sensor" setting** — its general meaning is now
+  understood (see the correction note above), but the specific protocol bit behind it is
+  still not confirmed; see `PROTOCOL.md`'s Open Question 3.
 - **OTA updates** — works, with one caveat: native ESPHome OTA fails if `logger: level:
   VERBOSE` is set (use the curl route below instead in that case).
 
-### Climate Controls (target state — see status above for what's actually reliable today)
+### Climate Controls (see status above for what's actually reliable today)
 | Control | Options | Status |
 |---------|---------|--------|
-| Power | On / Off | Decoded reliably; control experimental |
-| Mode | Auto, Cool, Heat, Dry, Fan Only | Decoded reliably; control experimental |
-| Target Temperature | 16°C – 30°C | Decoded for COOL/DRY; HEAT/AUTO setpoint decode unresolved |
-| Fan Speed | Auto, Quiet, Low, Medium, High | Not yet decoded |
+| Power | On / Off | Decoded and control both live-confirmed |
+| Mode | Auto, Cool, Heat, Dry, Fan Only | Decoded and control both live-confirmed |
+| Target Temperature | 16°C – 30°C | Decoded and control both live-confirmed, all modes including HEAT/AUTO |
+| Fan Speed | Auto, Quiet, Low, Medium, High | Decoded and live-confirmed (Quiet inferred); exposed via a dedicated select entity |
+| Economy | On / Off | Decoded and control both live-confirmed, both as a climate preset and a standalone switch |
 
 ### Sensors
 | Sensor | Description | Status |
 |--------|-------------|--------|
-| Target Temperature | Current setpoint | Working (COOL/DRY confirmed; HEAT/AUTO unresolved) |
-| Current Temperature | Room temperature | Not yet decoded — see Protocol |
+| Target Temperature | Current setpoint | Working, all modes including HEAT/AUTO |
+| Current Temperature | Room temperature (wired controller's own thermistor) | Working — see Protocol |
+| Fan Speed | Auto/Quiet/Low/Medium/High | Working (Quiet inferred, not independently tested) |
+| Economy | On/Off | Working, decoded and controllable |
 | WiFi Signal | RSSI in dBm | Working |
 | IP Address | Device IP on local network | Working |
 | Uptime | Time since last reboot | Working |
@@ -120,7 +141,7 @@ path.
 
 ```
 Fujitsu Heat Pump (Indoor Unit)
-        <->  LIN Bus (500 baud, 8N1)
+        <->  LIN Bus (500 baud, 8E1)
   linttl3 Module (TJA1021)
         <->  TTL UART (3.3V)
     ESP32-WROOM-32
@@ -129,7 +150,8 @@ Fujitsu Heat Pump (Indoor Unit)
 ```
 
 The Fujitsu indoor unit communicates with controllers using a **LIN bus** running at
-**500 baud, 8N1**. The linttl3 module converts the 12V/24V LIN bus signals to 3.3V TTL
+**500 baud, 8E1** (switched from 8N1 as of firmware 3B.21 — see UART Configuration
+below). The linttl3 module converts the 12V/24V LIN bus signals to 3.3V TTL
 levels suitable for the ESP32's UART.
 
 The ESP32 listens to frames on the bus and decodes them into Home Assistant. Injecting
@@ -196,13 +218,15 @@ wired to the bus — exactly the bench-test condition below.
 |-----------|-------|
 | Baud Rate | **500 bps** |
 | Data Bits | **8** |
-| Parity | **None** |
+| Parity | **Even (8E1)** — see note below |
 | Stop Bits | **1** |
 | Logic | Normal (not inverted) |
 
-> Some published Fujitsu LIN implementations use even parity (8E1) instead. 8N1 is what
-> this unit's receive path uses today; 8E1 is being evaluated for the transmit path (see
-> Protocol below) and hasn't shipped yet.
+> **Updated, 2 Sep 2026:** this table previously said "Parity: None" (8N1). As of firmware
+> 3B.21 the UART runs **8E1** — receiving works identically either way (the parity bit
+> doesn't affect the data bits), but transmit needs even parity to be accepted by the bus.
+> This was switched on upstream's explicit recommendation; see `PROTOCOL.md` and
+> `upstream-comparison.md`.
 
 ---
 
@@ -255,24 +279,34 @@ target different frame markers for different unit families.
 | AUTO | 0 | 0 |
 
 **Target temperature** — `B5` bits [4:1]: `temp_c = ((B5 >> 1) & 0x0F) + 16`. Confirmed for
-COOL and DRY. **Unresolved for HEAT/AUTO** — both modes read the same `B5` value regardless
-of the setpoint, so either the offset differs in those modes or the field isn't live there.
+COOL and DRY. HEAT/AUTO looked unresolved under this addressing (both modes read the same
+`B5` value regardless of setpoint) — **resolved 8 Aug 2026 under the corrected/upstream
+addressing below**, where HEAT and AUTO are separate fields and both read correctly.
 
-### Not yet decoded
+### Fan speed and room temperature — resolved (8 Aug 2026), live-confirmed (11 Aug 2026)
 
-- **Fan speed.** Every byte thought to carry it is constant across all 1112 captured
-  frames — fan speed is not where earlier notes assumed it was. Needs a dedicated capture
-  with fan cycled through every position while everything else is held fixed.
-- **Current (room) temperature.** Never successfully read; the byte long assumed to carry
-  it turns out to carry mode information instead.
+Both of these were briefly believed undecodable under the byte addressing above (every byte
+thought to carry fan speed was constant across all 1112 captured frames; the byte assumed to
+carry room temperature turned out to carry mode information instead).
 
-A promising but **not yet validated** hypothesis, informed by comparing this project against
-other published Fujitsu LIN implementations: inverting every received byte (`^= 0xFF`) and
-reading the frame two bytes later than the naive sync point may reveal both fields, since it
-would put this unit's traffic in line with those other implementations' field layout. This
-has only been checked against old capture logs re-read offline, not against a live unit with
-a corrected parser — treat it as a lead, not an answer, until it's been through a hardware
-session.
+**The fix: invert every received byte (`^= 0xFF`) and read the frame starting two bytes
+later than the naive `0xFE` sync point.** This aligns the traffic with the field layout used
+by other published Fujitsu LIN implementations, and once applied:
+
+- **Fan speed** is bits [6:4] of the corrected byte 3. Live-confirmed by cycling the
+  physical Fan Speed button (High→Medium→Low→Auto): **Auto=0, Low=2, Medium=3, High=4**
+  (Quiet=1 inferred from spacing, not independently button-tested). This has been the
+  `fan_mode` driving the climate entity — and, since firmware 4A.2, a dedicated HA `select`
+  entity — since firmware 3B.18.
+- **Room/controller temperature** is bits [6:1] of the corrected byte 6, and is live and
+  feeding the climate entity's current temperature.
+
+This is not a hypothesis anymore — it's the layout the current firmware actually implements
+(`components/fujitsu_climate/FujiHeatPump.cpp`). See the project's own `hardware-and-protocol.md`
+("Current field decoding" section) and `PROTOCOL.md`'s revision notes for the full field
+table and derivation; the byte tables above in this README describe the original,
+now-superseded addressing and are kept for historical/structural reference (frame length,
+sync markers, etc. are still accurate).
 
 ---
 
@@ -371,14 +405,17 @@ entity: climate.aircon_fujitsu_heat_pump
 - Check linttl3 is powered (LED on if equipped)
 - Verify common ground between all devices
 - Check TX/RX aren't swapped (linttl3 TX -> ESP32 GPIO16)
-- Confirm baud rate is 500 with parity NONE
+- Confirm baud rate is 500, 8E1 (not 8N1 — see UART Configuration above)
 
 ### Room Temperature / Fan Speed Show Nothing
-Expected right now — neither field is decoded yet (see Protocol above). This isn't a wiring
-or config problem.
+Both are decoded and should show real values as of firmware 3B.18 (see Protocol above). If
+they're genuinely blank, that points to a real problem — check firmware version and bus
+health (`binary_sensor.house_aircon_bus_alive`) rather than assuming it's expected.
 
 ### Target Temperature Wrong in HEAT or AUTO
-Known unresolved issue — see Protocol above. COOL and DRY are reliable.
+Was a known issue under the original byte addressing — resolved 8 Aug 2026 under the
+corrected addressing (see Protocol above). If you're still seeing this on current firmware,
+it's a regression worth reporting, not expected behaviour.
 
 ### Device Not Appearing in Home Assistant
 - Check the ESP32 is on WiFi (web interface accessible)
@@ -423,14 +460,24 @@ the bus, given transmit is still experimental.
   live unit while cycling the wired controller through modes and settings. The 16-byte
   UNIT+CTRL structure, mode identification, and power bit were all cracked in a single
   afternoon and published to Home Assistant.
-- **May-Aug 2026** — Dormant.
-- **Aug 2026** — Recovered and consolidated the local working tree; corrected the fan-speed
-  and room-temperature decode (both were previously misreported as confirmed); began
-  investigating the transmit path.
+- **May-Jul 2026** — Dormant.
+- **8-11 Aug 2026** — Recovered and consolidated the local working tree; found and fixed
+  the fan-speed and room-temperature decode (both had been misreported as confirmed under
+  the original byte addressing — the fix was inverting every byte and re-syncing 2 bytes
+  later); both live-confirmed against the real unit. HEAT/AUTO setpoint resolved the same
+  way.
+- **Aug-Sep 2026** — Adopted a vendored upstream transmit/decode engine; control from Home
+  Assistant (power, mode, target temperature, fan speed, Economy) confirmed live against
+  the real unit, gated behind an explicit kill switch. Corrected the wired controller's
+  model identification (AR-3TA3/UTB-TUB, not UTY-RNNUM) and documented the optional
+  UTD-RS100 remote sensor.
 
-Fan speed, room temperature, and the HEAT/AUTO setpoint offset are the remaining protocol
-gaps; a validated, tested transmit path is the remaining feature gap. See the open issues
-on this repo for current status.
+The transmit path is live and has been exercised successfully for several fields (see
+Climate Controls above), but hasn't been through the same volume of testing as decode —
+treat it as working-but-young rather than as mature as decode. The wired controller's
+Thermo Sensor setting (which physical thermistor the system uses) is understood in general
+but its exact protocol bit is still unconfirmed. See the open issues on this repo for
+current status.
 
 ---
 
@@ -444,9 +491,10 @@ This project stands on the shoulders of:
 - **[Hackaday: Frederic Germain & Myles Eftos (2017)](https://hackaday.io/project/19473-reverse-engineering-a-fujitsu-air-conditioner-unit)** - Original reverse engineering of the Fujitsu LIN bus protocol
 
 These target different unit families with different frame markers to the ART30LUAK, so
-their code is a reference for method rather than a drop-in byte layout — though their field
-layout (after correcting for this unit's byte inversion and frame sync offset) is the
-current lead on the still-undecoded fan and room-temperature fields, see Protocol above.
+their code isn't a byte-for-byte drop-in — but their field layout, after correcting for
+this unit's byte inversion and frame sync offset, turned out to match exactly, and is what
+this project's fan-speed and room-temperature decode (and the vendored transmit engine) are
+actually built on. See Protocol above.
 
 ---
 
