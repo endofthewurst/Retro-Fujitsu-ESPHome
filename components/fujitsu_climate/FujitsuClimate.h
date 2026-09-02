@@ -90,6 +90,11 @@ class FujitsuClimate : public climate::Climate, public Component {
   void set_corrected_room_temp_sensor(sensor::Sensor *s) { corrected_room_temp_sensor_ = s; }
   // 20 Aug 2026 -- see the file-header comment above and FujiHeatPump.h's Deviation #3.
   void set_thermo_sensor_text_sensor(text_sensor::TextSensor *s) { thermo_sensor_text_sensor_ = s; }
+  // 21 Aug 2026 -- see FujiHeatPump.h's lastRawUnknownBit. Second live-test
+  // candidate after controllerPresent, same passive/unconfirmed treatment.
+  void set_unknown_bit_text_sensor(text_sensor::TextSensor *s) { unknown_bit_text_sensor_ = s; }
+  // 21 Aug 2026 -- full raw frame diagnostic. See FujiHeatPump.h's lastRawFrame.
+  void set_raw_frame_text_sensor(text_sensor::TextSensor *s) { raw_frame_text_sensor_ = s; }
 
   // Public so the free-standing task function (fujitsu_bus_task, in the .cpp) can
   // reach it -- matches the reference esphome-fujitsu wrapper's own pattern
@@ -118,6 +123,8 @@ class FujitsuClimate : public climate::Climate, public Component {
   sensor::Sensor *corrected_setpoint_sensor_{nullptr};
   sensor::Sensor *corrected_room_temp_sensor_{nullptr};
   text_sensor::TextSensor *thermo_sensor_text_sensor_{nullptr};
+  text_sensor::TextSensor *unknown_bit_text_sensor_{nullptr};
+  text_sensor::TextSensor *raw_frame_text_sensor_{nullptr};
 
   // Bus-alive/status threshold (ms) -- carried forward unchanged from 3B.19's fix.
   // This project's own history found 1-3s quiet gaps are normal on this bus; a
@@ -145,6 +152,11 @@ class FujitsuClimate : public climate::Climate, public Component {
   float last_corrected_room_temp_{NAN};
   bool thermo_sensor_initialized_{false};
   int last_thermo_sensor_bit_{-1};
+  bool unknown_bit_initialized_{false};
+  int last_unknown_bit_{-1};
+  bool raw_frame_initialized_{false};
+  byte last_raw_frame_[8]{0};
+  uint32_t last_raw_frame_publish_ms_{0};
 
   climate::ClimateMode fuji_mode_to_climate_mode_(FujiMode mode);
   FujiMode climate_mode_to_fuji_mode_(climate::ClimateMode mode);

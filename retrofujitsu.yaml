@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.3"
+    version: "4A.5"
   on_boot:
     priority: 600
     then:
@@ -330,6 +330,9 @@ text_sensor:
   # Trimmed to bus_status in Phase 4 -- see components/fujitsu_climate/text_sensor.py
   # for why the other exploratory diagnostics were retired. thermo_sensor re-added
   # 20 Aug 2026, explicitly labelled unconfirmed -- see text_sensor.py's comment.
+  # unknown_bit added 21 Aug 2026 -- a second live-test candidate (FujiFrame::unknownBit)
+  # after controllerPresent/thermo_sensor was ruled out by two USB-tethered live tests
+  # the same day. Also explicitly unconfirmed -- see text_sensor.py's comment.
   - platform: fujitsu_climate
     fujitsu_climate_id: fujitsu_hp
     bus_status:
@@ -338,6 +341,12 @@ text_sensor:
     thermo_sensor:
       name: "Thermo Sensor (unconfirmed)"
       id: thermo_sensor
+    unknown_bit:
+      name: "Unknown Frame Bit (unconfirmed)"
+      id: unknown_bit
+    raw_frame:
+      name: "Raw Frame (unconfirmed)"
+      id: raw_frame
 
 # Binary sensors
 binary_sensor:

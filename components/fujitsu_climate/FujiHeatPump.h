@@ -132,6 +132,22 @@ class FujiHeatPump {
   // the local `ff` copy into an outgoing reply. Read-only outside this class.
   byte lastRawControllerPresent = 0;
 
+  // 21 Aug 2026 -- same passive-capture treatment, for FujiFrame::unknownBit
+  // (readBuf[1] bit 7, doc'd above as unsure what this bit indicates). Never
+  // exposed anywhere before today; added as a second live-test candidate for the
+  // UTY-RNNUM's Thermo Sensor setting after controllerPresent (frame[6] bit0) was
+  // ruled out by two USB-tethered live tests on 21 Aug 2026 that showed zero
+  // correlation with the physical button. Same capture point/reasoning as above.
+  byte lastRawUnknownBit = 0;
+  // 21 Aug 2026 -- full raw incoming frame (all 8 bytes), captured at the same
+  // point as lastRawControllerPresent/lastRawUnknownBit above. Added after finding
+  // byte2 (5 bits), byte5 (2 bits), byte6 bit7, and the entirety of byte7 have no
+  // named field anywhere in this decode -- rather than add one diagnostic per
+  // candidate bit, this exposes everything at once so a single live test can spot
+  // whichever byte/bit actually moves. Throttled at the FujitsuClimate layer (not
+  // here) before publish_state, since this changes on almost every valid frame.
+  byte lastRawFrame[8] = {0};
+
   FujiFrame decodeFrame();
   void encodeFrame(FujiFrame ff);
   void printFrame(byte buf[8], FujiFrame ff);
@@ -185,6 +201,13 @@ class FujiHeatPump {
   // NOT the same as FujiFrame::controllerPresent on currentState (which, for a
   // secondary controller, reflects OUR OWN reply's value, not the incoming frame's).
   byte getLastRawControllerPresent() { return lastRawControllerPresent; }
+
+  // 21 Aug 2026 -- see lastRawUnknownBit above. Same raw/passive/unconfirmed caveat.
+  byte getLastRawUnknownBit() { return lastRawUnknownBit; }
+  // 21 Aug 2026 -- see lastRawFrame above. Returns a pointer to the internal 8-byte
+  // buffer; read-only, single-threaded (fujitsu_bus_task), same as every other
+  // getter here -- caller should copy out promptly rather than hold the pointer.
+  byte *getLastRawFrame() { return lastRawFrame; }
 
   FujiFrame *getCurrentState();
   FujiFrame *getUpdateState();
