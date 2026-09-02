@@ -1,4 +1,4 @@
-# Phase 4: Vendored-engine rebuild (19 Aug 2026)
+﻿# Phase 4: Vendored-engine rebuild (19 Aug 2026)
 # ESP32 connected as a SECONDARY (slave) controller on the Fujitsu LIN bus, via a
 # TJA1021/SIT1021T (LIN3TL) transceiver, alongside the existing wired UTY-RNNUM
 # controller (which stays in place and remains fully capable of operating the system
@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.5"
+    version: "4A.6"
   on_boot:
     priority: 600
     then:
@@ -347,6 +347,17 @@ text_sensor:
     raw_frame:
       name: "Raw Frame (unconfirmed)"
       id: raw_frame
+    # 2 Sep 2026 -- requested-vs-actual state sync (plan-to-completion.md). Empty
+    # string when in sync; human-readable diff (e.g. "power: requested=on,
+    # actual=off") otherwise. out_of_sync_since needs a real time source for its ISO
+    # timestamp -- reuses the homeassistant_time already configured below.
+    sync_mismatch:
+      name: "Sync Mismatch"
+      id: sync_mismatch
+    out_of_sync_since:
+      name: "Out of Sync Since"
+      id: out_of_sync_since
+      time_id: homeassistant_time
 
 # Binary sensors
 binary_sensor:
@@ -354,12 +365,19 @@ binary_sensor:
     name: "Status"
     id: system_status
 
+  # 2 Sep 2026: restructured to a nested schema so a second binary_sensor (In Sync,
+  # part of the requested-vs-actual state sync feature -- plan-to-completion.md) could
+  # be added alongside Bus Alive. bus_alive keeps its previous device_class/
+  # entity_category exactly, now inherited from binary_sensor.py's schema defaults
+  # rather than being spelled out here.
   - platform: fujitsu_climate
     fujitsu_climate_id: fujitsu_hp
-    name: "Bus Alive"
-    id: bus_alive
-    device_class: connectivity
-    entity_category: diagnostic
+    bus_alive:
+      name: "Bus Alive"
+      id: bus_alive
+    in_sync:
+      name: "In Sync"
+      id: aircon_in_sync
 
 # Switches
 switch:

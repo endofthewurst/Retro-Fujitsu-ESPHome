@@ -1,6 +1,7 @@
-import esphome.codegen as cg
+﻿import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import text_sensor
+from esphome.components import time as time_
 
 from . import FujitsuClimate
 
@@ -9,6 +10,9 @@ CONF_BUS_STATUS = "bus_status"
 CONF_THERMO_SENSOR = "thermo_sensor"
 CONF_UNKNOWN_BIT = "unknown_bit"
 CONF_RAW_FRAME = "raw_frame"
+CONF_SYNC_MISMATCH = "sync_mismatch"
+CONF_OUT_OF_SYNC_SINCE = "out_of_sync_since"
+CONF_TIME_ID = "time_id"
 
 # Phase 4 rebuild: trimmed down to bus_status only -- corrected_mode/corrected_fan_raw/
 # corrected_economy/mystery_bit/message_dest/message_type/boot_probe/frame_timing were
@@ -27,6 +31,13 @@ CONF_RAW_FRAME = "raw_frame"
 # Mystery Bit investigation" for the four rounds of live testing that failed to settle
 # the mapping. Exposed so a future dedicated live test (single button press, precise
 # timestamp) has somewhere to watch without needing new firmware first.
+#
+# 2 Sep 2026: added sync_mismatch/out_of_sync_since -- the two text-sensor halves of
+# the requested-vs-actual state sync feature (plan-to-completion.md's "Requested vs.
+# actual state sync" design, dated 2 Sep 2026; the third half, a plain "in sync"
+# binary_sensor, lives in binary_sensor.py). out_of_sync_since needs a real-time clock
+# to timestamp the first divergence, hence the extra time_id option and the FujitsuClimate
+# setter it wires up -- see FujitsuClimate.h/.cpp.
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_FUJITSU_CLIMATE_ID): cv.use_id(FujitsuClimate),
@@ -44,6 +55,16 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_RAW_FRAME): text_sensor.text_sensor_schema(
             entity_category="diagnostic",
             icon="mdi:code-braces",
+        ),
+        cv.Optional(CONF_SYNC_MISMATCH): text_sensor.text_sensor_schema(
+            icon="mdi:sync-alert",
+        ),
+        cv.Optional(CONF_OUT_OF_SYNC_SINCE): text_sensor.text_sensor_schema(
+            icon="mdi:clock-alert-outline",
+        ).extend(
+            {
+                cv.Required(CONF_TIME_ID): cv.use_id(time_.RealTimeClock),
+            }
         ),
     }
 )
@@ -64,3 +85,14 @@ async def to_code(config):
     if CONF_RAW_FRAME in config:
         sens = await text_sensor.new_text_sensor(config[CONF_RAW_FRAME])
         cg.add(parent.set_raw_frame_text_sensor(sens))
+
+    if CONF_SYNC_MISMATCH in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_SYNC_MISMATCH])
+        cg.add(parent.set_sync_mismatch_text_sensor(sens))
+
+    if CONF_OUT_OF_SYNC_SINCE in config:
+        conf = config[CONF_OUT_OF_SYNC_SINCE]
+        sens = await text_sensor.new_text_sensor(conf)
+        cg.add(parent.set_out_of_sync_since_text_sensor(sens))
+        time_var = await cg.get_variable(conf[CONF_TIME_ID])
+        cg.add(parent.set_time_id(time_var))
