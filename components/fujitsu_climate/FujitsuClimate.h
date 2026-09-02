@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // ---------------------------------------------------------------------------
 // Phase 4 rebuild (19 Aug 2026) -- see tx-architecture-review-and-adoption-plan.md
@@ -32,6 +32,20 @@
 // Also fixed update_climate_state_()'s FAN-only setpoint clamp, which had incorrectly
 // been clearing target_temperature to NAN for ANY mode whenever the raw byte happened
 // to read 0, not just FAN_ONLY.
+//
+// 2 Sep 2026 update: added the requested-vs-actual state sync feature
+// (plan-to-completion.md's "Requested vs. actual state sync" design, dated 2 Sep
+// 2026). Every real control() call now snapshots the complete logical target
+// (requested_on_/requested_mode_/requested_setpoint_/requested_fan_ +
+// requested_at_ms_), seeded from the first real decoded frame at boot rather than
+// zero. update_sync_status_(), called from update_climate_state_() on every tick
+// once at least one real frame has arrived since the last request (the "settle
+// window" -- see the design doc), diffs that snapshot against the live decoded
+// state and publishes three new entities: in_sync_binary_sensor_ (headline flag),
+// sync_mismatch_text_sensor_ (human-readable diff string, empty when in sync), and
+// out_of_sync_since_text_sensor_ (ISO timestamp of first divergence, via time_id_).
+// Deliberately does NOT react to a mismatch itself -- per the design, that judgment
+// call belongs to whatever HA automation consumes these entities, not to firmware.
 // ---------------------------------------------------------------------------
 
 #include "esphome/core/component.h"
@@ -39,6 +53,7 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/time/real_time_clock.h"
 
 #include "FujiHeatPump.h"
 
@@ -96,6 +111,12 @@ class FujitsuClimate : public climate::Climate, public Component {
   // 21 Aug 2026 -- full raw frame diagnostic. See FujiHeatPump.h's lastRawFrame.
   void set_raw_frame_text_sensor(text_sensor::TextSensor *s) { raw_frame_text_sensor_ = s; }
 
+  // 2 Sep 2026 -- requested-vs-actual state sync. See the file-header comment above.
+  void set_in_sync_binary_sensor(binary_sensor::BinarySensor *s) { in_sync_binary_sensor_ = s; }
+  void set_sync_mismatch_text_sensor(text_sensor::TextSensor *s) { sync_mismatch_text_sensor_ = s; }
+  void set_out_of_sync_since_text_sensor(text_sensor::TextSensor *s) { out_of_sync_since_text_sensor_ = s; }
+  void set_time_id(time::RealTimeClock *t) { time_id_ = t; }
+
   // Public so the free-standing task function (fujitsu_bus_task, in the .cpp) can
   // reach it -- matches the reference esphome-fujitsu wrapper's own pattern
   // (FujitsuClimate::heatPump is public there too, for the same reason: a plain C
@@ -126,6 +147,11 @@ class FujitsuClimate : public climate::Climate, public Component {
   text_sensor::TextSensor *unknown_bit_text_sensor_{nullptr};
   text_sensor::TextSensor *raw_frame_text_sensor_{nullptr};
 
+  binary_sensor::BinarySensor *in_sync_binary_sensor_{nullptr};
+  text_sensor::TextSensor *sync_mismatch_text_sensor_{nullptr};
+  text_sensor::TextSensor *out_of_sync_since_text_sensor_{nullptr};
+  time::RealTimeClock *time_id_{nullptr};
+
   // Bus-alive/status threshold (ms) -- carried forward unchanged from 3B.19's fix.
   // This project's own history found 1-3s quiet gaps are normal on this bus; a
   // threshold at or below FujiHeatPump::isBound()'s own fixed 1000ms flickers on them.
@@ -133,6 +159,10 @@ class FujitsuClimate : public climate::Climate, public Component {
 
   void update_bus_status_();
   void update_climate_state_();
+  // 2 Sep 2026 -- requested-vs-actual state sync comparison, called from
+  // update_climate_state_() once per tick with the same decoded frame it just used.
+  // See FujitsuClimate.cpp for the full logic and the file-header comment above.
+  void update_sync_status_(const FujiFrame &local);
 
   uint32_t state_log_last_ms_{0};
 
@@ -157,6 +187,27 @@ class FujitsuClimate : public climate::Climate, public Component {
   bool raw_frame_initialized_{false};
   byte last_raw_frame_[8]{0};
   uint32_t last_raw_frame_publish_ms_{0};
+
+  // Requested-vs-actual state sync tracking (plan-to-completion.md, 2 Sep 2026).
+  // requested_* is the *complete* logical target as of the last control() call (or
+  // the first real decoded frame, if no HA command has been issued yet) -- not a
+  // partial diff of only what that call touched, since the frame the firmware
+  // builds always carries every field. requested_at_ms_ is set from millis() on the
+  // main/API thread inside control(); getLastFrameReceived() is set from millis() on
+  // the bus task -- same clock domain, so update_sync_status_() can compare them
+  // directly to implement the settle window.
+  bool requested_seeded_{false};
+  bool requested_on_{false};
+  FujiMode requested_mode_{FujiMode::AUTO};
+  byte requested_setpoint_{0};
+  FujiFanMode requested_fan_{FujiFanMode::FAN_AUTO};
+  uint32_t requested_at_ms_{0};
+
+  bool sync_initialized_{false};
+  bool last_in_sync_{true};
+  std::string last_sync_mismatch_;
+  bool currently_out_of_sync_{false};
+  std::string out_of_sync_since_str_;
 
   climate::ClimateMode fuji_mode_to_climate_mode_(FujiMode mode);
   FujiMode climate_mode_to_fuji_mode_(climate::ClimateMode mode);

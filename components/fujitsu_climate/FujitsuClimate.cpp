@@ -1,6 +1,8 @@
-#include "FujitsuClimate.h"
+﻿#include "FujitsuClimate.h"
 #include "esphome/core/log.h"
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 
 // ---------------------------------------------------------------------------
 // Phase 4 rebuild (19 Aug 2026) -- see FujitsuClimate.h and
@@ -28,12 +30,47 @@
 // raw byte happened to read exactly 0 in ANY mode, when the intent (per its own
 // comment) was only ever to suppress a setpoint in FAN_ONLY mode, which genuinely
 // carries none. Scoped the clamp to FAN_ONLY specifically.
+//
+// 2 Sep 2026: added the requested-vs-actual state sync feature
+// (plan-to-completion.md's "Requested vs. actual state sync" design, dated 2 Sep
+// 2026) -- see FujitsuClimate.h's file-header comment for the summary, and
+// update_sync_status_() below for the full logic. control() now snapshots the
+// complete requested_* target on every real HA command; update_climate_state_()
+// calls update_sync_status_() every tick with the same decoded frame it just used.
 // ---------------------------------------------------------------------------
 
 namespace esphome {
 namespace fujitsu_climate {
 
 static const char *const TAG = "fujitsu.climate";
+
+namespace {
+// Small human-readable name helpers for the sync_mismatch diff string -- kept as
+// free functions rather than class methods since they don't touch any instance
+// state, unlike fuji_mode_to_climate_mode_()/etc. below which translate to/from
+// ESPHome's own ClimateMode/ClimateFanMode enums instead of plain strings.
+std::string fuji_mode_name(FujiMode mode) {
+  switch (mode) {
+    case FujiMode::AUTO: return "Auto";
+    case FujiMode::COOL: return "Cool";
+    case FujiMode::DRY: return "Dry";
+    case FujiMode::FAN: return "Fan";
+    case FujiMode::HEAT: return "Heat";
+    default: return "Unknown";
+  }
+}
+
+std::string fuji_fan_name(FujiFanMode fan) {
+  switch (fan) {
+    case FujiFanMode::FAN_AUTO: return "Auto";
+    case FujiFanMode::FAN_QUIET: return "Quiet";
+    case FujiFanMode::FAN_LOW: return "Low";
+    case FujiFanMode::FAN_MEDIUM: return "Medium";
+    case FujiFanMode::FAN_HIGH: return "High";
+    default: return "Unknown";
+  }
+}
+}  // namespace
 
 #ifdef ESP32
 // Dedicated bus-I/O task -- see FujitsuClimate.h's top-of-file comment. Modelled on
@@ -306,6 +343,117 @@ void FujitsuClimate::update_climate_state_() {
   }
 
   this->corrected_sensors_initialized_ = true;
+
+  // 2 Sep 2026 -- requested-vs-actual state sync (plan-to-completion.md). Uses the
+  // same decoded frame this function just processed, so it stays exactly in step
+  // with the climate entity's own state -- see update_sync_status_() below.
+  this->update_sync_status_(local);
+}
+
+void FujitsuClimate::update_sync_status_(const FujiFrame &local) {
+  bool actual_on = local.onOff == 1;
+  auto actual_mode = static_cast<FujiMode>(local.acMode);
+  auto actual_fan = static_cast<FujiFanMode>(local.fanMode);
+  byte actual_setpoint = local.temperature;
+
+  uint32_t last_frame_ms = static_cast<uint32_t>(this->heat_pump.getLastFrameReceived());
+
+  if (!this->requested_seeded_) {
+    // Seed from the first real decoded frame rather than defaulting to zero, so a
+    // freshly booted device doesn't report "out of sync" before any HA command has
+    // ever been issued -- see plan-to-completion.md's design note.
+    this->requested_seeded_ = true;
+    this->requested_on_ = actual_on;
+    this->requested_mode_ = actual_mode;
+    this->requested_setpoint_ = actual_setpoint;
+    this->requested_fan_ = actual_fan;
+    this->requested_at_ms_ = last_frame_ms;
+    ESP_LOGD(TAG, "Sync tracking seeded from first real frame: on=%d mode=%d setpoint=%d fan=%d", actual_on,
+              static_cast<int>(actual_mode), actual_setpoint, static_cast<int>(actual_fan));
+  }
+
+  // Settle window: don't judge sync until at least one real decoded frame has
+  // arrived since the request was armed (or the seed above) -- otherwise every HA
+  // command would flag a momentary false mismatch during normal adoption lag, per
+  // plan-to-completion.md's design note. control() sets requested_at_ms_ from
+  // millis() on the main/API thread; getLastFrameReceived() is set from millis() on
+  // the bus task -- same clock, so a subtraction-based (overflow-safe) comparison is
+  // valid here, matching this file's existing millis()-arithmetic convention.
+  if (static_cast<int32_t>(last_frame_ms - this->requested_at_ms_) <= 0) {
+    return;
+  }
+
+  std::string mismatch;
+  if (actual_on != this->requested_on_) {
+    mismatch += "power: requested=";
+    mismatch += (this->requested_on_ ? "on" : "off");
+    mismatch += ", actual=";
+    mismatch += (actual_on ? "on" : "off");
+  }
+
+  // Mode/setpoint/fan only mean something when both sides agree the unit should be
+  // on -- comparing them while either side is off would just be noise on top of the
+  // power mismatch already captured above.
+  if (this->requested_on_ && actual_on) {
+    if (actual_mode != this->requested_mode_) {
+      if (!mismatch.empty()) mismatch += "; ";
+      mismatch += "mode: requested=" + fuji_mode_name(this->requested_mode_) + ", actual=" + fuji_mode_name(actual_mode);
+    }
+    if (actual_setpoint != this->requested_setpoint_) {
+      if (!mismatch.empty()) mismatch += "; ";
+      mismatch += "setpoint: requested=" + std::to_string(static_cast<int>(this->requested_setpoint_)) +
+                  ", actual=" + std::to_string(static_cast<int>(actual_setpoint));
+    }
+    if (actual_fan != this->requested_fan_) {
+      if (!mismatch.empty()) mismatch += "; ";
+      mismatch += "fan: requested=" + fuji_fan_name(this->requested_fan_) + ", actual=" + fuji_fan_name(actual_fan);
+    }
+  }
+
+  bool in_sync = mismatch.empty();
+  bool first_run = !this->sync_initialized_;
+  this->sync_initialized_ = true;
+
+  if (!in_sync && !this->currently_out_of_sync_) {
+    // First tick of a new divergence -- stamp it.
+    this->currently_out_of_sync_ = true;
+    if (this->time_id_ != nullptr && this->time_id_->now().is_valid()) {
+      this->out_of_sync_since_str_ = this->time_id_->now().strftime("%Y-%m-%dT%H:%M:%S%z");
+    } else {
+      this->out_of_sync_since_str_ = "unknown (no time source)";
+    }
+    ESP_LOGW(TAG, "Out of sync: %s (since %s)", mismatch.c_str(), this->out_of_sync_since_str_.c_str());
+    if (this->out_of_sync_since_text_sensor_ != nullptr) {
+      this->out_of_sync_since_text_sensor_->publish_state(this->out_of_sync_since_str_);
+    }
+  } else if (in_sync && this->currently_out_of_sync_) {
+    // Back in sync -- clear the divergence timestamp.
+    this->currently_out_of_sync_ = false;
+    this->out_of_sync_since_str_.clear();
+    ESP_LOGI(TAG, "Back in sync");
+    if (this->out_of_sync_since_text_sensor_ != nullptr) {
+      this->out_of_sync_since_text_sensor_->publish_state("");
+    }
+  } else if (first_run && !this->currently_out_of_sync_ && this->out_of_sync_since_text_sensor_ != nullptr) {
+    // Nothing to report on the very first comparison (seeded in sync) -- still give
+    // the entity a real, empty state rather than leaving it at ESPHome's default
+    // "unknown" indefinitely.
+    this->out_of_sync_since_text_sensor_->publish_state("");
+  }
+
+  if (first_run || in_sync != this->last_in_sync_) {
+    this->last_in_sync_ = in_sync;
+    if (this->in_sync_binary_sensor_ != nullptr) {
+      this->in_sync_binary_sensor_->publish_state(in_sync);
+    }
+  }
+
+  if (first_run || mismatch != this->last_sync_mismatch_) {
+    this->last_sync_mismatch_ = mismatch;
+    if (this->sync_mismatch_text_sensor_ != nullptr) {
+      this->sync_mismatch_text_sensor_->publish_state(mismatch);
+    }
+  }
 }
 
 void FujitsuClimate::dump_config() {
@@ -393,6 +541,14 @@ void FujitsuClimate::control(const climate::ClimateCall &call) {
   // way to know the true cause for certain.
   bool updated = false;
 
+  // 2 Sep 2026 -- requested-vs-actual state sync (plan-to-completion.md). Snapshot the
+  // COMPLETE logical target here, not a partial diff of only what this call touched:
+  // any field this call doesn't mention keeps its previous requested_* value, exactly
+  // mirroring how the frame the firmware actually builds always carries every field.
+  // Preset/economy is deliberately not part of this snapshot -- the sync design only
+  // tracks power/mode/setpoint/fan (see plan-to-completion.md's entity table).
+  bool sync_updated = false;
+
 #ifdef ESP32
   if (xSemaphoreTake(this->lock, pdMS_TO_TICKS(100)) != pdTRUE) {
     ESP_LOGW(TAG, "Climate control request dropped -- could not get the bus lock in time, try again");
@@ -404,21 +560,29 @@ void FujitsuClimate::control(const climate::ClimateCall &call) {
     auto climate_mode = call.get_mode().value();
     if (climate_mode == climate::CLIMATE_MODE_OFF) {
       this->heat_pump.setOnOff(false);
+      this->requested_on_ = false;
     } else {
       this->heat_pump.setMode(static_cast<byte>(this->climate_mode_to_fuji_mode_(climate_mode)));
       this->heat_pump.setOnOff(true);
+      this->requested_on_ = true;
+      this->requested_mode_ = this->climate_mode_to_fuji_mode_(climate_mode);
     }
     updated = true;
+    sync_updated = true;
   }
 
   if (call.get_target_temperature().has_value()) {
     this->heat_pump.setTemp(static_cast<byte>(call.get_target_temperature().value()));
+    this->requested_setpoint_ = static_cast<byte>(call.get_target_temperature().value());
     updated = true;
+    sync_updated = true;
   }
 
   if (call.get_fan_mode().has_value()) {
     this->heat_pump.setFanMode(static_cast<byte>(this->climate_fan_to_fuji_fan_(call.get_fan_mode().value())));
+    this->requested_fan_ = this->climate_fan_to_fuji_fan_(call.get_fan_mode().value());
     updated = true;
+    sync_updated = true;
   }
 
   if (call.get_preset().has_value()) {
@@ -428,6 +592,10 @@ void FujitsuClimate::control(const climate::ClimateCall &call) {
 
   if (updated) {
     this->pending_update = true;
+  }
+  if (sync_updated) {
+    this->requested_seeded_ = true;
+    this->requested_at_ms_ = millis();
   }
 
 #ifdef ESP32
