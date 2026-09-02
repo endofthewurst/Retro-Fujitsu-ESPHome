@@ -2,7 +2,8 @@
 
 Model: ART30LUAK (RSG series ~2010)
 Controller: Fujitsu AR-3TA3 / UTB-TUB (previously misidentified in this repo as UTY-RNNUM — see revision note below)
-Bus: Single-wire LIN, 500 baud, 8N1, NO parity
+Bus: Single-wire LIN, 500 baud, 8N1, NO parity (receive path; TRANSMIT now uses 8E1
+as of firmware 3B.21 — see revision note below)
 ESP32 role: Secondary slave, GPIO16 RX / GPIO17 TX via TJA1021/SIT1021T transceiver
 
 > **Revision note (7 Aug 2026):** all six capture logs are now committed under `captures/`
@@ -16,6 +17,19 @@ ESP32 role: Secondary slave, GPIO16 RX / GPIO17 TX via TJA1021/SIT1021T transcei
 > doesn't affect any of the decoded bus fields below, which were derived from real captures.
 > Separately, the meaning of the "thermo sensor" button/icon referenced in Open Question 3
 > is now understood — see the note added there.
+
+> **Revision note (2 Sep 2026):** fan speed IS decoded, live-confirmed, and has been the
+> production `fan_mode` value (plus its own HA select entity) since firmware 3B.18 — this
+> document's "Fan Speed NOT DECODED" section and Open Question 1 below are stale and were
+> resolved back on 8 Aug 2026 (see `upstream-comparison.md`) and live-confirmed 10-11 Aug
+> 2026. This whole document describes the **original bespoke decode against raw,
+> uninverted bytes**, which is superseded by the "upstream" layout (every byte XOR 0xFF,
+> frame boundary 2 bytes later) actually implemented in
+> `components/fujitsu_climate/FujiHeatPump.cpp` today. See the project's
+> `hardware-and-protocol.md` ("Current field decoding" section) for the authoritative,
+> current field table — this file is kept mainly for its empirical byte-variance data
+> (still accurate) and its historical open-question framing (now answered for fan speed
+> and room temperature; still open for the thermo-sensor/CN8 question and CTRL B3).
 
 ---
 
@@ -98,22 +112,32 @@ bool on = (C0 >> 1) & 0x01;
 - 0xCE -> bit[1]=1 -> **ON** ✓
 - 0xCC / 0xCD -> bit[1]=0 -> **OFF** ✓
 
-### Fan Speed ❌ NOT DECODED
+### Fan Speed ✓ DECODED, LIVE-CONFIRMED (resolved 8 Aug 2026, live-confirmed 11 Aug 2026)
 
 **Previously recorded here as `(C0 >> 2) & 0x07` with "3 = MEDIUM confirmed". That was wrong
-and the code implementing it should not be trusted.**
+and the code implementing it should not be trusted — see below for why, kept for history.**
 
 C0 takes exactly three values across all 1112 captured frames — `0xCC`, `0xCD`, `0xCE` —
 which differ only in bits 0 and 1. **Bits [4:2] are `011` in every frame ever captured.**
-The decoder reports "fan=3" because those bits are constant, not because the fan was on
-medium. It would report MEDIUM regardless of the actual fan setting.
+The old decoder reported "fan=3" because those bits are constant, not because the fan was
+on medium. It would have reported MEDIUM regardless of the actual fan setting. Fan speed
+is not in C0 at all under this document's raw/uninverted byte addressing.
 
-The previous open question — "user cycled LOW -> AUTO -> HIGH -> MED -> LOW, CTRL0 bytes not
-yet retrieved from logs" — is now answered: **the CTRL0 bytes are in the logs and they do
-not change.** Therefore either that fan-cycling session was never captured to a surviving
-log, or fan speed is communicated outside this 16-byte cycle.
+**Resolved:** fan speed lives in a different byte, under a different (upstream) addressing
+scheme that requires inverting every byte (`XOR 0xFF`) and reading the frame starting 2
+bytes later than this document's `0xFE` sync point — see `upstream-comparison.md` for the
+full derivation. Once corrected, fan speed is **bits [6:4] of the byte this document's old
+scheme never separately named** (`readBuf[3]` in the current firmware, `kFanMask =
+0b01110000`), and it is not constant — it took two distinct values in the original 29 April
+captures alone (`AUTO`, `MEDIUM`), immediately falsifying the "always 3" reading above.
 
-**This is now the largest open question in the project.** See Next Steps 1.
+**Live-confirmed 11 Aug 2026** (`test-and-dev-workflow.md`'s Session B): cycling the
+physical Fan Speed button High→Medium→Low→Auto on the real unit produced raw values
+`4→3→2→0` in lockstep. James independently confirmed the mapping: **0=Auto, 2=Low,
+3=Medium, 4=High**. Quiet=1 is inferred from the enum's spacing, not independently
+button-tested. This has been the actual `fan_mode` driving `climate.aircon_fujitsu_heat_pump`
+(and a dedicated HA `select` entity since 4A.2) since firmware 3B.18 — not a diagnostic-only
+reading.
 
 ### Operating Mode ✓
 
@@ -139,18 +163,24 @@ All five modes are uniquely identified by this pair. No two modes share the same
 - HEAT and AUTO share B5=0xC4 and B6=0xE8; distinguished only by C0 bit[0]
 - DRY is unique: B6=0xFF, the only mode where B6 upper nibble is 0xF rather than 0xE
 
-### Room temperature ❌ NOT DECODED
+### Room temperature ✓ DECODED, LIVE-CONFIRMED (resolved 8 Aug 2026)
 
-The old decode read B6 and produced ~52C. The logs contain **189 rejection warnings**:
+The old decode read B6 and produced ~52C, which is impossible. The logs contain **189
+rejection warnings**:
 
 ```
 Room temp 52.0C out of range (byte6=0xE9) - keeping nan
 Room temp 53.0C out of range (byte6=0xEB) - keeping nan
 ```
 
-B6's upper bits carry mode information, not temperature. **Current temperature has never
-been successfully read** — every capture shows `room=nanC`, so the HA climate entity has no
-current-temperature source. See Open Question 3.
+B6's upper bits carry mode information, not temperature, **under this document's raw byte
+addressing** — that specific finding still holds. **Resolved:** under the upstream
+(inverted, 2-byte-shifted) addressing, room/controller temperature decodes correctly from
+a different byte entirely — see `upstream-comparison.md`. This is now live, feeding the HA
+climate entity's current temperature since firmware 3B.18. Note this is specifically the
+**wired controller's own thermistor** reading (not necessarily the indoor unit's, or a
+UTD-RS100's, if one is fitted) — see Open Question 3 for what "Thermo Sensor" selects
+between.
 
 ---
 
@@ -172,15 +202,12 @@ or that mode selection persists in the CTRL frame while the unit is off.
 
 ## Open Questions
 
-### 1. Fan speed — where is it? (highest priority)
+### 1. Fan speed — RESOLVED, see the Fan Speed section above
 
-Not in C0 bits[4:2]; not anywhere else in the 16-byte cycle, since no other byte varies.
-
-**To resolve:** fix mode and temperature, then change *only* fan (AUTO -> QUIET -> LOW ->
-MED -> HIGH), pausing ~15s on each. Critically, **log the raw byte stream, not just parsed
-frames** — the parser accepts the 8 bytes after a UNIT frame unconditionally as the CTRL
-frame, so a third frame type would be silently consumed and never seen. Without a raw dump
-a negative result is uninterpretable.
+Not in C0 bits[4:2] under this document's raw byte addressing — correct, that part still
+holds. But it is decoded and live-confirmed under the upstream (inverted, 2-byte-shifted)
+addressing — see the "Fan Speed" entry in Field Decoding above, `upstream-comparison.md`,
+and `test-and-dev-workflow.md`'s Session B. No further hardware session is needed for this.
 
 ### 2. Temperature offset for HEAT/AUTO
 
@@ -243,7 +270,7 @@ following CTRL frame. Prevents offset drift. Confirmed working: zero sync errors
 
 ## Next Steps
 
-1. **Fan speed capture with raw byte logging** — see Open Question 1. Blocks Phase 4 fan control.
+1. ~~Fan speed capture with raw byte logging~~ — **done.** Resolved 8 Aug 2026, live-confirmed 11 Aug 2026. See the Fan Speed section above.
 2. **Confirm temperature offset for HEAT** — set HEAT to 24C and read B5.
 3. **Map thermo sensor / room temp** — toggle sensor button, compare B6.
 4. **Wire decoded state to HA climate entity** — `on_off_`, `mode_`, `fan_mode_` decode
