@@ -1,7 +1,7 @@
 # Fujitsu ART30LUAK LIN Bus Protocol Reference
 
 Model: ART30LUAK (RSG series ~2010)
-Controller: UTY-RNNUM
+Controller: Fujitsu AR-3TA3 / UTB-TUB (previously misidentified in this repo as UTY-RNNUM — see revision note below)
 Bus: Single-wire LIN, 500 baud, 8N1, NO parity
 ESP32 role: Secondary slave, GPIO16 RX / GPIO17 TX via TJA1021/SIT1021T transceiver
 
@@ -9,6 +9,13 @@ ESP32 role: Secondary slave, GPIO16 RX / GPIO17 TX via TJA1021/SIT1021T transcei
 > and were re-analysed in bulk (1112 frames). That analysis **invalidated two fields that
 > this document previously recorded as confirmed** — fan speed and room temperature. Both
 > are marked ❌ below. Everything else held up.
+
+> **Revision note (1 Sep 2026):** the wired controller on this unit is a Fujitsu
+> **AR-3TA3 / UTB-TUB**, not the UTY-RNNUM assumed above and elsewhere in this document
+> (corroborated by the ART30/36LUAK technical manual's spec table: "WIRED (AR-3TA*)"). This
+> doesn't affect any of the decoded bus fields below, which were derived from real captures.
+> Separately, the meaning of the "thermo sensor" button/icon referenced in Open Question 3
+> is now understood — see the note added there.
 
 ---
 
@@ -189,11 +196,23 @@ or both captures were taken mid-transition.
 
 ### 3. Room temperature / thermo sensor source
 
-The UTY-RNNUM has a "thermo sensor" button switching between the wall controller's sensor and
-the indoor air handler's sensor. B6 bits[7:3] likely encode which is active.
+The wired controller (Fujitsu AR-3TA3 / UTB-TUB) has a "Thermo Sensor" button/setting
+switching the room-temperature source between the wired controller's own thermistor and a
+remote source — either the indoor unit's own built-in thermistor, or a Fujitsu **UTD-RS100**
+remote sensor if one has been fitted in its place at connector **CN8** on the indoor unit
+(not yet confirmed either way on this installation). B6 bits[7:3] likely encode which source
+is active.
 
-**To resolve:** toggle the thermo sensor button and compare B6 before/after against a real
-thermometer reading. Also let the room drift 2C over ten minutes and watch for any byte tracking it.
+**Update, 1 Sep 2026:** the wired controller's LCD shows an icon resembling the controller
+itself when its own thermistor is in use, and hides that icon when a remote source is in
+use — so the physical icon is a reliable ground truth for which state is active. This wasn't
+watched during this repo's earlier Thermo Sensor button testing (three live presses produced
+real bus anomalies and, on the third, an ESP32 crash — see the project history), so it's
+still not known which icon state corresponds to which observed bus behaviour.
+
+**To resolve:** toggle the Thermo Sensor button and compare B6 before/after against the
+physical icon state (not just a real thermometer reading), and confirm whether a UTD-RS100
+is fitted at CN8 first. Do this USB-tethered given the crash history above.
 
 ### 4. CTRL B3 = 0x5F vs 0x7E
 

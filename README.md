@@ -5,7 +5,7 @@ ESP32 and ESPHome — without modifying or replacing the existing wired controll
 
 Developed and tested against a **~2010-era Fujitsu ART30LUAK (RSG series)** heat pump using
 its LIN bus interface, with the ESP32 joining as a **secondary (slave) controller** alongside
-the existing UTY-RNNUM wired remote.
+the existing wired remote (Fujitsu **AR-3TA3 / UTB-TUB** — see correction note below).
 
 **Current status:** decoding the bus is working and solid (power, mode, and target
 temperature are read correctly into Home Assistant). Sending commands back to the unit is
@@ -14,9 +14,40 @@ temperature are read correctly into Home Assistant). Sending commands back to th
 
 ---
 
+## Correction, 1 September 2026 — actual wired controller model, and the UTD-RS100 option
+
+This repo's docs (and its earlier design notes) assumed the wired controller fitted to this
+ART30LUAK was a Fujitsu **UTY-RNNUM**. That was wrong. The actual unit is a Fujitsu
+**AR-3TA3 / UTB-TUB** simple wired remote controller (the exact model suffix is hard to pin
+down and varies by region/distributor) — corroborated by the ART30/36LUAK technical manual's
+spec table, which lists the remote controller type as "WIRED (AR-3TA*)". All the live
+bus-decode and bus-capture work in this repo is unaffected by this correction, since it was
+derived from real captures against the actual hardware, not from the UTY-RNNUM manual's
+description — but any reasoning that leaned on the UTY-RNNUM manual's specific button/DIP-switch
+layout (rather than the captured bus behaviour) should be treated with caution.
+
+Separately: the ART30/36LUAK has an optional **Fujitsu UTD-RS100** remote temperature sensor.
+If fitted, it physically replaces the connection to the indoor unit's own built-in thermistor
+at connector **CN8** on the indoor unit's PCB — it does not sit alongside it. Whether a
+UTD-RS100 is actually fitted on this specific installation has **not been physically
+confirmed** (checking connector CN8 on the indoor unit would confirm it either way).
+
+This matters for the wired controller's **Thermo Sensor** setting (see
+[Open Question 3 in PROTOCOL.md](PROTOCOL.md)): that setting selects which room-temperature
+source the system uses — the wired controller's own thermistor, or a remote source (the
+indoor unit's own thermistor, or the UTD-RS100 if fitted at CN8 in its place). On the wired
+controller's LCD, an icon resembling the wired controller itself is shown when its own
+thermistor is in use, and is not shown when a remote source is in use. This wasn't understood
+during this repo's earlier Thermo Sensor button testing (see the project history), so any
+future retest of that setting should watch the physical icon directly, and confirm whether a
+UTD-RS100 is fitted at CN8, rather than inferring the sensor source from bus behaviour alone.
+
+---
+
 ## Design principle: the ESP32 is never the boss
 
-The wired UTY-RNNUM is the **primary controller** and must always remain fully capable of
+The wired controller (Fujitsu **AR-3TA3 / UTB-TUB** — see correction note below) is the
+**primary controller** and must always remain fully capable of
 running the system on its own — regardless of whether the ESP32 is powered, on WiFi, able
 to reach Home Assistant, or running firmware without bugs. A person must always be able to
 walk up to the wired controller and operate the heat pump exactly as if the ESP32 didn't
@@ -33,7 +64,8 @@ path.
 |-----------|-------|
 | Indoor Unit | Fujitsu **ART30LUAK** |
 | Outdoor Unit | Fujitsu **AOT30LMBDL** |
-| Wired Controller | Fujitsu **UTY-RNNUM** |
+| Wired Controller | Fujitsu **AR-3TA3 / UTB-TUB** (see correction note below) |
+| Optional remote sensor | Fujitsu **UTD-RS100** (not confirmed fitted on this installation — see correction note below) |
 
 ### Electronics Required
 | Component | Notes |
@@ -52,7 +84,7 @@ path.
 - **Status LED** — Visual feedback on the ESP32 board (GPIO2).
 - **Web interface** — ESPHome's built-in web server for local access.
 - **Non-invasive installation** — connects as a secondary (slave) controller; the existing
-  UTY-RNNUM keeps working normally, with no modification to the heat pump or the controller.
+  wired controller keeps working normally, with no modification to the heat pump or the controller.
 
 ### Experimental / in progress
 - **Control from Home Assistant** — the climate entity accepts commands (power, mode,
