@@ -157,6 +157,43 @@ void FujitsuClimate::update_bus_status_() {
       this->thermo_sensor_text_sensor_->publish_state(bit ? "1 (unconfirmed)" : "0 (unconfirmed)");
     }
   }
+
+  // 21 Aug 2026 -- second passive/unconfirmed diagnostic, for FujiFrame::unknownBit
+  // (readBuf[1] bit 7). Never exposed before today -- added as a live-test candidate
+  // for the Thermo Sensor setting after controllerPresent was ruled out (two
+  // USB-tethered live tests, same day, zero correlation with the physical button).
+  // Same passive capture point/reasoning, same change-gated publish pattern.
+  if (this->hardware_present_ && this->unknown_bit_text_sensor_ != nullptr) {
+    int bit = this->heat_pump.getLastRawUnknownBit();
+    if (!this->unknown_bit_initialized_ || bit != this->last_unknown_bit_) {
+      this->unknown_bit_initialized_ = true;
+      this->last_unknown_bit_ = bit;
+      this->unknown_bit_text_sensor_->publish_state(bit ? "1 (unconfirmed)" : "0 (unconfirmed)");
+    }
+  }
+
+  // 21 Aug 2026 -- full raw frame diagnostic (see FujiHeatPump.h's lastRawFrame).
+  // Throttled to at most one publish every 250ms on top of the change-gate below --
+  // unlike the single-bit diagnostics above, this changes on almost every valid
+  // frame during normal operation (temperature/updateMagic churn alone would do
+  // it), so an un-throttled change-gate here would reproduce exactly the
+  // unthrottled hot-path publish pattern this project's prior crashes trace back
+  // to. 250ms bounds it to ~4/s even during a Thermo Sensor-style oscillation burst.
+  if (this->hardware_present_ && this->raw_frame_text_sensor_ != nullptr) {
+    byte *frame = this->heat_pump.getLastRawFrame();
+    uint32_t now = millis();
+    bool changed = !this->raw_frame_initialized_ || memcmp(frame, this->last_raw_frame_, 8) != 0;
+    bool due = (now - this->last_raw_frame_publish_ms_) > 250;
+    if (changed && (due || !this->raw_frame_initialized_)) {
+      this->raw_frame_initialized_ = true;
+      memcpy(this->last_raw_frame_, frame, 8);
+      this->last_raw_frame_publish_ms_ = now;
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%02X %02X %02X %02X %02X %02X %02X %02X",
+               frame[0], frame[1], frame[2], frame[3], frame[4], frame[5], frame[6], frame[7]);
+      this->raw_frame_text_sensor_->publish_state(buf);
+    }
+  }
 }
 
 void FujitsuClimate::update_climate_state_() {

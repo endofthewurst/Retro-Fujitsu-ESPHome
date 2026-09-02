@@ -147,6 +147,14 @@ bool FujiHeatPump::waitForFrame() {
     // still reflects what was actually received, not what we're about to send back.
     lastRawControllerPresent = ff.controllerPresent;
 
+    // 21 Aug 2026 -- same treatment for unknownBit (readBuf[1] bit 7). See
+    // FujiHeatPump.h's lastRawUnknownBit comment for why this was added.
+    lastRawUnknownBit = ff.unknownBit;
+
+    // 21 Aug 2026 -- see FujiHeatPump.h's lastRawFrame comment. readBuf is still
+    // exactly the just-decoded incoming frame at this point in the function.
+    memcpy(lastRawFrame, readBuf, 8);
+
     if (debugPrint) {
       Serial.printf("<-- ");
       printFrame(readBuf, ff);
