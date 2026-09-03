@@ -182,8 +182,10 @@ class FujitsuClimate : public climate::Climate, public Component {
   float last_corrected_room_temp_{NAN};
   bool thermo_sensor_initialized_{false};
   int last_thermo_sensor_bit_{-1};
+  uint32_t last_thermo_sensor_publish_ms_{0};
   bool unknown_bit_initialized_{false};
   int last_unknown_bit_{-1};
+  uint32_t last_unknown_bit_publish_ms_{0};
   bool raw_frame_initialized_{false};
   byte last_raw_frame_[8]{0};
   uint32_t last_raw_frame_publish_ms_{0};

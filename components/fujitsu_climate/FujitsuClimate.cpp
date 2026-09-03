@@ -186,11 +186,26 @@ void FujitsuClimate::update_bus_status_() {
   // our own reply logic reuses that field, but its mapping to the UTY-RNNUM's Thermo
   // Sensor Local/Remote setting was never confirmed across four rounds of live
   // testing (test-and-dev-workflow.md) -- reported here as a raw bit, not a label.
+  // 2 Sep 2026 -- found oscillating continuously on bus connect with no button press at
+  // all, with no throttle on this path (unlike raw_frame's, added 21 Aug below) -- a
+  // live crash-precursor risk (state-of-play.md's "2 September 2026" section), not just
+  // an open decode question. Throttled to 250ms here, mirroring raw_frame's own fix, on
+  // top of the existing change-gate. 3 Sep 2026: James re-tested the physical Thermo
+  // Sensor button against this diagnostic and Unknown Frame Bit below -- no change in
+  // either on this pass, unlike the 2 Sep session where pressing it seemed to stop the
+  // oscillation. That correlation now looks coincidental rather than causal; the
+  // underlying icon-vs-bit mapping is still unconfirmed (see the "Correction, 1
+  // September 2026" section in state-of-play.md) and unaffected by this throttle fix,
+  // which only bounds publish rate, not the decode itself.
   if (this->hardware_present_ && this->thermo_sensor_text_sensor_ != nullptr) {
     int bit = this->heat_pump.getLastRawControllerPresent();
-    if (!this->thermo_sensor_initialized_ || bit != this->last_thermo_sensor_bit_) {
+    uint32_t now = millis();
+    bool changed = !this->thermo_sensor_initialized_ || bit != this->last_thermo_sensor_bit_;
+    bool due = (now - this->last_thermo_sensor_publish_ms_) > 250;
+    if (changed && (due || !this->thermo_sensor_initialized_)) {
       this->thermo_sensor_initialized_ = true;
       this->last_thermo_sensor_bit_ = bit;
+      this->last_thermo_sensor_publish_ms_ = now;
       this->thermo_sensor_text_sensor_->publish_state(bit ? "1 (unconfirmed)" : "0 (unconfirmed)");
     }
   }
@@ -200,11 +215,17 @@ void FujitsuClimate::update_bus_status_() {
   // for the Thermo Sensor setting after controllerPresent was ruled out (two
   // USB-tethered live tests, same day, zero correlation with the physical button).
   // Same passive capture point/reasoning, same change-gated publish pattern.
+  // 2 Sep 2026 -- same unthrottled-hot-path risk and same 250ms throttle fix as
+  // thermo_sensor above.
   if (this->hardware_present_ && this->unknown_bit_text_sensor_ != nullptr) {
     int bit = this->heat_pump.getLastRawUnknownBit();
-    if (!this->unknown_bit_initialized_ || bit != this->last_unknown_bit_) {
+    uint32_t now = millis();
+    bool changed = !this->unknown_bit_initialized_ || bit != this->last_unknown_bit_;
+    bool due = (now - this->last_unknown_bit_publish_ms_) > 250;
+    if (changed && (due || !this->unknown_bit_initialized_)) {
       this->unknown_bit_initialized_ = true;
       this->last_unknown_bit_ = bit;
+      this->last_unknown_bit_publish_ms_ = now;
       this->unknown_bit_text_sensor_->publish_state(bit ? "1 (unconfirmed)" : "0 (unconfirmed)");
     }
   }
