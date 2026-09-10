@@ -1,4 +1,4 @@
-﻿import esphome.codegen as cg
+import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import text_sensor
 from esphome.components import time as time_
@@ -10,6 +10,7 @@ CONF_BUS_STATUS = "bus_status"
 CONF_THERMO_SENSOR = "thermo_sensor"
 CONF_UNKNOWN_BIT = "unknown_bit"
 CONF_RAW_FRAME = "raw_frame"
+CONF_SWING = "swing"
 CONF_SYNC_MISMATCH = "sync_mismatch"
 CONF_OUT_OF_SYNC_SINCE = "out_of_sync_since"
 CONF_TIME_ID = "time_id"
@@ -56,6 +57,10 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:code-braces",
         ),
+        cv.Optional(CONF_SWING): text_sensor.text_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:help-circle-outline",
+        ),
         cv.Optional(CONF_SYNC_MISMATCH): text_sensor.text_sensor_schema(
             icon="mdi:sync-alert",
         ),
@@ -85,6 +90,10 @@ async def to_code(config):
     if CONF_RAW_FRAME in config:
         sens = await text_sensor.new_text_sensor(config[CONF_RAW_FRAME])
         cg.add(parent.set_raw_frame_text_sensor(sens))
+
+    if CONF_SWING in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_SWING])
+        cg.add(parent.set_swing_text_sensor(sens))
 
     if CONF_SYNC_MISMATCH in config:
         sens = await text_sensor.new_text_sensor(config[CONF_SYNC_MISMATCH])

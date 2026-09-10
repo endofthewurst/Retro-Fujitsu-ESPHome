@@ -1,4 +1,4 @@
-﻿# Phase 4: Vendored-engine rebuild (19 Aug 2026)
+# Phase 4: Vendored-engine rebuild (19 Aug 2026)
 # ESP32 connected as a SECONDARY (slave) controller on the Fujitsu LIN bus, via a
 # TJA1021/SIT1021T (LIN3TL) transceiver, alongside the existing wired UTY-RNNUM
 # controller (which stays in place and remains fully capable of operating the system
@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.7"
+    version: "4A.8"
   on_boot:
     priority: 600
     then:
@@ -347,6 +347,9 @@ text_sensor:
     raw_frame:
       name: "Raw Frame (unconfirmed)"
       id: raw_frame
+    swing:
+      name: "Swing (unconfirmed)"
+      id: swing
     # 2 Sep 2026 -- requested-vs-actual state sync (plan-to-completion.md). Empty
     # string when in sync; human-readable diff (e.g. "power: requested=on,
     # actual=off") otherwise. out_of_sync_since needs a real time source for its ISO
