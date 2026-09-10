@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // ---------------------------------------------------------------------------
 // Phase 4 rebuild (19 Aug 2026) -- see tx-architecture-review-and-adoption-plan.md
@@ -110,6 +110,12 @@ class FujitsuClimate : public climate::Climate, public Component {
   void set_unknown_bit_text_sensor(text_sensor::TextSensor *s) { unknown_bit_text_sensor_ = s; }
   // 21 Aug 2026 -- full raw frame diagnostic. See FujiHeatPump.h's lastRawFrame.
   void set_raw_frame_text_sensor(text_sensor::TextSensor *s) { raw_frame_text_sensor_ = s; }
+  // 10 Sep 2026 -- Swing diagnostic. Decoded upstream (byte 5 bit 2,
+  // FujiHeatPump::getSwingMode()) but never live-tested against a real button press
+  // before now -- see hardware-and-protocol.md's field table and state-of-play.md's
+  // "What is decoded" table ("Swing: Not yet tested live"). Same passive/unconfirmed
+  // treatment as thermo_sensor/unknown_bit above.
+  void set_swing_text_sensor(text_sensor::TextSensor *s) { swing_text_sensor_ = s; }
 
   // 2 Sep 2026 -- requested-vs-actual state sync. See the file-header comment above.
   void set_in_sync_binary_sensor(binary_sensor::BinarySensor *s) { in_sync_binary_sensor_ = s; }
@@ -146,6 +152,7 @@ class FujitsuClimate : public climate::Climate, public Component {
   text_sensor::TextSensor *thermo_sensor_text_sensor_{nullptr};
   text_sensor::TextSensor *unknown_bit_text_sensor_{nullptr};
   text_sensor::TextSensor *raw_frame_text_sensor_{nullptr};
+  text_sensor::TextSensor *swing_text_sensor_{nullptr};
 
   binary_sensor::BinarySensor *in_sync_binary_sensor_{nullptr};
   text_sensor::TextSensor *sync_mismatch_text_sensor_{nullptr};
@@ -189,6 +196,9 @@ class FujitsuClimate : public climate::Climate, public Component {
   bool raw_frame_initialized_{false};
   byte last_raw_frame_[8]{0};
   uint32_t last_raw_frame_publish_ms_{0};
+  bool swing_initialized_{false};
+  int last_swing_bit_{-1};
+  uint32_t last_swing_publish_ms_{0};
 
   // Requested-vs-actual state sync tracking (plan-to-completion.md, 2 Sep 2026).
   // requested_* is the *complete* logical target as of the last control() call (or

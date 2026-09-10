@@ -1,4 +1,4 @@
-﻿#include "FujitsuClimate.h"
+#include "FujitsuClimate.h"
 #include "esphome/core/log.h"
 #include <cmath>
 #include <cstdio>
@@ -227,6 +227,23 @@ void FujitsuClimate::update_bus_status_() {
       this->last_unknown_bit_ = bit;
       this->last_unknown_bit_publish_ms_ = now;
       this->unknown_bit_text_sensor_->publish_state(bit ? "1 (unconfirmed)" : "0 (unconfirmed)");
+    }
+  }
+
+  // 10 Sep 2026 -- Swing diagnostic (FujiHeatPump::getSwingMode(), byte 5 bit 2).
+  // Decoded upstream but never live-tested before now -- see hardware-and-protocol.md
+  // and state-of-play.md's "What is decoded" table. Same passive/unconfirmed
+  // treatment and 250ms throttle as thermo_sensor/unknown_bit above.
+  if (this->hardware_present_ && this->swing_text_sensor_ != nullptr) {
+    int bit = this->heat_pump.getSwingMode();
+    uint32_t now = millis();
+    bool changed = !this->swing_initialized_ || bit != this->last_swing_bit_;
+    bool due = (now - this->last_swing_publish_ms_) > 250;
+    if (changed && (due || !this->swing_initialized_)) {
+      this->swing_initialized_ = true;
+      this->last_swing_bit_ = bit;
+      this->last_swing_publish_ms_ = now;
+      this->swing_text_sensor_->publish_state(bit ? "On (unconfirmed)" : "Off (unconfirmed)");
     }
   }
 
