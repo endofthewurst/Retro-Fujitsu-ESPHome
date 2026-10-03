@@ -155,6 +155,15 @@ bool FujiHeatPump::waitForFrame() {
     // exactly the just-decoded incoming frame at this point in the function.
     memcpy(lastRawFrame, readBuf, 8);
 
+    // 4 Oct 2026 (4A.9) -- same bytes, split by whether the frame is addressed to us.
+    if (ff.messageDest == controllerAddress) {
+      memcpy(lastToUsFrame, readBuf, 8);
+      toUsSeen = true;
+    } else {
+      memcpy(lastOtherFrame, readBuf, 8);
+      otherSeen = true;
+    }
+
     if (debugPrint) {
       Serial.printf("<-- ");
       printFrame(readBuf, ff);
@@ -275,6 +284,13 @@ bool FujiHeatPump::waitForFrame() {
         printFrame(readBuf, ff);
         // handle errors here
         return false;
+      }
+
+      // 4 Oct 2026 (4A.9) -- EXPERIMENTAL Thermo Sensor write test (default off). See
+      // thermoWriteTest in FujiHeatPump.h. updateMagic occupies byte 5 bits 7:4, so
+      // |= 0x08 sets byte 5 bit 7 on the wire.
+      if (thermoWriteTest && ff.messageType == static_cast<byte>(FujiMessageType::STATUS)) {
+        ff.updateMagic |= 0x08;
       }
 
       encodeFrame(ff);

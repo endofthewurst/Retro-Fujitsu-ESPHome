@@ -11,6 +11,8 @@ CONF_THERMO_SENSOR = "thermo_sensor"
 CONF_UNKNOWN_BIT = "unknown_bit"
 CONF_RAW_FRAME = "raw_frame"
 CONF_SWING = "swing"
+CONF_RAW_FRAME_TO_US = "raw_frame_to_us"
+CONF_RAW_FRAME_OTHER = "raw_frame_other"
 CONF_SYNC_MISMATCH = "sync_mismatch"
 CONF_OUT_OF_SYNC_SINCE = "out_of_sync_since"
 CONF_TIME_ID = "time_id"
@@ -57,6 +59,14 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:code-braces",
         ),
+        cv.Optional(CONF_RAW_FRAME_TO_US): text_sensor.text_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:code-braces",
+        ),
+        cv.Optional(CONF_RAW_FRAME_OTHER): text_sensor.text_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:code-braces",
+        ),
         cv.Optional(CONF_SWING): text_sensor.text_sensor_schema(
             entity_category="diagnostic",
             icon="mdi:help-circle-outline",
@@ -90,6 +100,14 @@ async def to_code(config):
     if CONF_RAW_FRAME in config:
         sens = await text_sensor.new_text_sensor(config[CONF_RAW_FRAME])
         cg.add(parent.set_raw_frame_text_sensor(sens))
+
+    if CONF_RAW_FRAME_TO_US in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_RAW_FRAME_TO_US])
+        cg.add(parent.set_raw_frame_to_us_text_sensor(sens))
+
+    if CONF_RAW_FRAME_OTHER in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_RAW_FRAME_OTHER])
+        cg.add(parent.set_raw_frame_other_text_sensor(sens))
 
     if CONF_SWING in config:
         sens = await text_sensor.new_text_sensor(config[CONF_SWING])

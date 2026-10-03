@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.8"
+    version: "4A.9"
   on_boot:
     priority: 600
     then:
@@ -350,6 +350,13 @@ text_sensor:
     swing:
       name: "Swing (unconfirmed)"
       id: swing
+    # 4 Oct 2026 (4A.9) -- the two raw frame types, kept separate (see FujiHeatPump.h).
+    raw_frame_to_us:
+      name: "Raw Frame To Us"
+      id: raw_frame_to_us
+    raw_frame_other:
+      name: "Raw Frame Other"
+      id: raw_frame_other
     # 2 Sep 2026 -- requested-vs-actual state sync (plan-to-completion.md). Empty
     # string when in sync; human-readable diff (e.g. "power: requested=on,
     # actual=off") otherwise. out_of_sync_since needs a real time source for its ISO
@@ -381,6 +388,11 @@ binary_sensor:
     in_sync:
       name: "In Sync"
       id: aircon_in_sync
+    # 4 Oct 2026 (4A.9) -- Thermo Sensor icon, found by a passive button test on 3 Oct
+    # (byte 5 bit 7 of the frame addressed to us). On = icon shown on the wired controller.
+    thermo_icon:
+      name: "Thermo Sensor Icon"
+      id: thermo_icon
 
 # Switches
 switch:
@@ -406,6 +418,19 @@ switch:
     turn_off_action:
       - lambda: 'id(fujitsu_hp)->set_control_enabled(false);'
 
+  # 4 Oct 2026 (4A.9) -- EXPERIMENTAL. Sets byte 5 bit 7 in our replies to test whether
+  # the Thermo Sensor bit is writable from the secondary controller. Never restored on.
+  - platform: template
+    name: "Thermo Sensor Write Test"
+    id: thermo_write_test
+    icon: "mdi:flask-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - lambda: 'id(fujitsu_hp)->set_thermo_write_test(true);'
+    turn_off_action:
+      - lambda: 'id(fujitsu_hp)->set_thermo_write_test(false);'
 
   # Economy Mode as a standalone switch -- added 21 Aug 2026. climate.preset already
   # supports CLIMATE_PRESET_ECO (confirmed live-adopted, both directions, same day),

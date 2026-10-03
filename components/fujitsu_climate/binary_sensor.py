@@ -7,6 +7,7 @@ from . import FujitsuClimate
 CONF_FUJITSU_CLIMATE_ID = "fujitsu_climate_id"
 CONF_BUS_ALIVE = "bus_alive"
 CONF_IN_SYNC = "in_sync"
+CONF_THERMO_ICON = "thermo_icon"
 
 # Restructured 2 Sep 2026 (from a single flat schema) to a nested schema, matching
 # text_sensor.py's existing pattern -- needed so a second binary_sensor, "In Sync"
@@ -27,6 +28,12 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_IN_SYNC): binary_sensor.binary_sensor_schema(
             icon="mdi:sync",
         ),
+        # 4 Oct 2026 (4A.9): byte 5 bit 7 of the frame addressed to us. On = the wired
+        # controller's Thermo Sensor icon is shown (its own sensor in use).
+        cv.Optional(CONF_THERMO_ICON): binary_sensor.binary_sensor_schema(
+            entity_category="diagnostic",
+            icon="mdi:thermometer-auto",
+        ),
     }
 )
 
@@ -39,3 +46,6 @@ async def to_code(config):
     if CONF_IN_SYNC in config:
         sens = await binary_sensor.new_binary_sensor(config[CONF_IN_SYNC])
         cg.add(parent.set_in_sync_binary_sensor(sens))
+    if CONF_THERMO_ICON in config:
+        sens = await binary_sensor.new_binary_sensor(config[CONF_THERMO_ICON])
+        cg.add(parent.set_thermo_icon_binary_sensor(sens))
