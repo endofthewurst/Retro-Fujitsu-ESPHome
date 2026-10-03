@@ -241,12 +241,29 @@ still not known which icon state corresponds to which observed bus behaviour.
 physical icon state (not just a real thermometer reading), and confirm whether a UTD-RS100
 is fitted at CN8 first. Do this USB-tethered given the crash history above.
 
+**Update, 3 Oct 2026 — the icon bit is found.** It is byte 5 bit 7 (0x80) of the frame
+addressed to us (source 0x20 → dest 0x21, after un-inverting): `84` = icon shown (wired
+controller's own sensor in use), `04` = icon off. It is the high nibble ("updateMagic") of
+byte 5. Validated by one passive test (two presses, two transitions, correct direction).
+The old `thermo_sensor` / `unknown_bit` "oscillation" was an artefact: the diagnostic raw
+frame alternated between frames addressed to us (`20 A1 ...`) and to others (`00 A0 ...`).
+**Write test (fw 4A.9):** ORing 0x08 into `updateMagic` of our STATUS replies had no effect;
+the icon stayed off and the bus stayed healthy, so the setting appears to be owned by the
+wired controller (one trial, heat mode only). Emulating the controller is not recommended.
+
 ### 4. CTRL B3 = 0x5F vs 0x7E
 
 CTRL[3] is normally 0x5F and becomes 0x7E during a settings update. Observed exactly 4 times,
 all in `3B10_buttons.log` between 13:21:53 and 13:22:04 — during temperature button presses.
 Almost certainly a change-in-progress handshake flag, and likely required on transmitted
 command frames.
+
+### 5. Defrost / oil recovery indicator — OPEN
+
+The wired display shows an icon during defrost or oil recovery. No bit identified yet.
+Plan: capture frames (now stored split into "to us" and "other") on a cold humid morning,
+diff around the icon, and check whether defrost and oil recovery share a bit (the Stand-by
+hot-start icon is a possible stand-in for testing). Target: a `defrost_active` binary sensor.
 
 ---
 
@@ -272,7 +289,8 @@ following CTRL frame. Prevents offset drift. Confirmed working: zero sync errors
 
 1. ~~Fan speed capture with raw byte logging~~ — **done.** Resolved 8 Aug 2026, live-confirmed 11 Aug 2026. See the Fan Speed section above.
 2. **Confirm temperature offset for HEAT** — set HEAT to 24C and read B5.
-3. **Map thermo sensor / room temp** — toggle sensor button, compare B6.
+3. ~~Map thermo sensor icon~~ — **bit found, 3 Oct 2026** (byte 5 bit 7; see Open Question 3). Remaining: control (write test was negative) and what the setting changes.
+3a. **Defrost / oil-recovery active flag** — identify the bit (Open Question 5) and expose `defrost_active`.
 4. **Wire decoded state to HA climate entity** — `on_off_`, `mode_`, `fan_mode_` decode
    correctly in parseCTRLFrame(); still need pushing to the ESPHome climate component publish.
 5. **Phase 4: transmit.** The CTRL frame is the wired controller's own frame, so as a

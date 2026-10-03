@@ -108,9 +108,11 @@ path.
 ### Experimental / in progress
 - **Swing** — decoded upstream in principle (see `PROTOCOL.md`) but not live-tested on
   this unit.
-- **The wired controller's "Thermo Sensor" setting** — its general meaning is now
-  understood (see the correction note above), but the specific protocol bit behind it is
-  still not confirmed; see `PROTOCOL.md`'s Open Question 3.
+- **The wired controller's "Thermo Sensor" setting** — the icon bit is now identified
+  (byte 5 bit 7 of the frame addressed to us) and monitored read-only via the "Thermo
+  Sensor Icon" binary sensor. Setting it from the ESP32 was tried and had no effect; see
+  `PROTOCOL.md`'s Open Question 3 and the Roadmap below.
+- **Defrost / oil recovery detection** — not yet decoded; see the Roadmap below.
 - **OTA updates** — works, with one caveat: native ESPHome OTA fails if `logger: level:
   VERBOSE` is set (use the curl route below instead in that case).
 
@@ -130,6 +132,8 @@ path.
 | Current Temperature | Room temperature (wired controller's own thermistor) | Working — see Protocol |
 | Fan Speed | Auto/Quiet/Low/Medium/High | Working (Quiet inferred, not independently tested) |
 | Economy | On/Off | Working, decoded and controllable |
+| Thermo Sensor Icon | Wired controller is using its own sensor (diagnostic) | Working (fw 4A.9), read-only |
+| Raw Frame To Us / Other | Last raw frame addressed to us / to others (diagnostic) | Working (fw 4A.9) |
 | WiFi Signal | RSSI in dBm | Working |
 | IP Address | Device IP on local network | Working |
 | Uptime | Time since last reboot | Working |
@@ -471,13 +475,40 @@ the bus, given transmit is still experimental.
   the real unit, gated behind an explicit kill switch. Corrected the wired controller's
   model identification (AR-3TA3/UTB-TUB, not UTY-RNNUM) and documented the optional
   UTD-RS100 remote sensor.
+- **Oct 2026** — Installed in the house, bus-powered. Found the Thermo Sensor icon bit
+  (byte 5 bit 7 of frames addressed to us); firmware 4A.9 adds read-only monitoring and
+  split raw-frame diagnostics. A write test had no effect. RoomMind configuration reviewed.
 
 The transmit path is live and has been exercised successfully for several fields (see
 Climate Controls above), but hasn't been through the same volume of testing as decode —
 treat it as working-but-young rather than as mature as decode. The wired controller's
-Thermo Sensor setting (which physical thermistor the system uses) is understood in general
-but its exact protocol bit is still unconfirmed. See the open issues on this repo for
-current status.
+Thermo Sensor icon is now decoded and monitored read-only (writing it has been tried and does
+not work); Defrost detection is still open. See the Roadmap below.
+
+---
+
+## Roadmap / To do
+
+Full detail: `docs/session-5A-checkin-2026-10-03.md`.
+
+### A. Thermo Sensor icon — monitoring done, control open
+- [x] **A1. Monitor.** The icon is byte 5 bit 7 (0x80) of the frame addressed to us (`84` = shown, `04` = off); exposed as `binary_sensor` "Thermo Sensor Icon" (fw 4A.9), validated by one passive test, 3 Oct 2026.
+- [ ] **A2.** Second confirmation cycle (the icon was toggled twice in one test only).
+- [ ] **A3.** Retire the noisy `thermo_sensor_unconfirmed` / `unknown_bit_unconfirmed` / `raw_frame_unconfirmed` diagnostics.
+- [ ] **A4.** Establish what the icon actually changes (the 21.0 vs 19.7 °C room-temperature gap is *not* explained by it).
+- [ ] **A5. Control.** Write test (ORing 0x08 into `updateMagic` in STATUS replies) had **no effect**: icon stayed off, bus healthy. Repeat in other modes/conditions, look for other fields in full-frame captures, or accept read-only with an HA-side advisory. Emulating the wired controller's frame is **not** recommended (ESP32 is never the boss).
+- [ ] **A6.** Keep or remove the "Thermo Sensor Write Test" switch.
+
+### B. Defrost / oil-recovery active flag — open
+- [ ] **B1.** Arm a capture watch for a cold, humid morning; export frames inside the ~10-day HA recorder retention (use `Raw Frame To Us` / `Raw Frame Other`).
+- [ ] **B2.** Identify the bit by diffing frames around the wired display's defrost icon; use the Stand-by hot-start icon as a stand-in; check whether defrost and oil recovery share a bit.
+- [ ] **B3.** Expose `defrost_active` as a `binary_sensor`. ESPHome 2025.4.2 climate actions may lack DEFROSTING, so `hvac_action: defrosting` may need a template/HA-side wrapper (unverified).
+- [ ] **B4.** Live validation against the physical icon.
+- [ ] **B5.** Use the flag in RoomMind (avoid treating defrost as short-cycling or a failed heat call).
+
+### C. Other
+- API/WiFi link drops (five brief `unavailable` events in two days) not yet root-caused.
+- RoomMind short-cycling (4–8 minute runs observed 1–2 Oct); five rooms share the single climate entity.
 
 ---
 
