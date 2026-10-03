@@ -148,6 +148,24 @@ class FujiHeatPump {
   // here) before publish_state, since this changes on almost every valid frame.
   byte lastRawFrame[8] = {0};
 
+  // 4 Oct 2026 (4A.9) -- the same raw incoming frames as lastRawFrame, but kept
+  // SEPARATELY by type instead of being overwritten by whichever arrived last (which
+  // made the old raw_frame diagnostic alternate between two unrelated frames).
+  // lastToUsFrame = the frame addressed to our own controllerAddress (SECONDARY) --
+  // the one we reply to. lastOtherFrame = every other frame seen on the bus.
+  // Passive-test finding, 3 Oct 2026: byte 5 bit 7 of lastToUsFrame tracks the wired
+  // controller's Thermo Sensor icon (set = icon shown). See getToUsThermoBit().
+  byte lastToUsFrame[8] = {0};
+  byte lastOtherFrame[8] = {0};
+  bool toUsSeen = false;
+  bool otherSeen = false;
+
+  // 4 Oct 2026 (4A.9) -- EXPERIMENTAL, default off. When set, STATUS replies to the
+  // unit also carry updateMagic bit 3 (= byte 5 bit 7 on the wire) to test whether the
+  // Thermo Sensor bit is writable from the secondary controller. Written from the
+  // main/API thread, read from the bus task -- a plain volatile bool is enough.
+  volatile bool thermoWriteTest = false;
+
   FujiFrame decodeFrame();
   void encodeFrame(FujiFrame ff);
   void printFrame(byte buf[8], FujiFrame ff);
@@ -208,6 +226,19 @@ class FujiHeatPump {
   // buffer; read-only, single-threaded (fujitsu_bus_task), same as every other
   // getter here -- caller should copy out promptly rather than hold the pointer.
   byte *getLastRawFrame() { return lastRawFrame; }
+
+  // 4 Oct 2026 (4A.9) -- see lastToUsFrame/lastOtherFrame above. Same read-only,
+  // copy-out-promptly caveat as getLastRawFrame().
+  byte *getLastToUsFrame() { return lastToUsFrame; }
+  byte *getLastOtherFrame() { return lastOtherFrame; }
+  bool hasToUsFrame() { return toUsSeen; }
+  bool hasOtherFrame() { return otherSeen; }
+  // Single-byte read, so atomic against the bus task. true = Thermo Sensor icon shown
+  // on the wired controller (controller's own sensor in use) -- validated by one
+  // passive button test on 3 Oct 2026 (two presses, two transitions, right direction).
+  bool getToUsThermoBit() { return (lastToUsFrame[5] & 0x80) != 0; }
+  void setThermoWriteTest(bool v) { thermoWriteTest = v; }
+  bool getThermoWriteTest() { return thermoWriteTest; }
 
   FujiFrame *getCurrentState();
   FujiFrame *getUpdateState();

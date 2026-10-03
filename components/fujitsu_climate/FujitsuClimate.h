@@ -123,6 +123,13 @@ class FujitsuClimate : public climate::Climate, public Component {
   void set_out_of_sync_since_text_sensor(text_sensor::TextSensor *s) { out_of_sync_since_text_sensor_ = s; }
   void set_time_id(time::RealTimeClock *t) { time_id_ = t; }
 
+  // 4 Oct 2026 (4A.9) -- Thermo Sensor icon (byte 5 bit 7 of the frame addressed to us),
+  // the two raw-frame types published separately, and the experimental write test.
+  void set_thermo_icon_binary_sensor(binary_sensor::BinarySensor *s) { thermo_icon_binary_sensor_ = s; }
+  void set_raw_frame_to_us_text_sensor(text_sensor::TextSensor *s) { raw_frame_to_us_text_sensor_ = s; }
+  void set_raw_frame_other_text_sensor(text_sensor::TextSensor *s) { raw_frame_other_text_sensor_ = s; }
+  void set_thermo_write_test(bool enabled);
+
   // Public so the free-standing task function (fujitsu_bus_task, in the .cpp) can
   // reach it -- matches the reference esphome-fujitsu wrapper's own pattern
   // (FujitsuClimate::heatPump is public there too, for the same reason: a plain C
@@ -158,6 +165,19 @@ class FujitsuClimate : public climate::Climate, public Component {
   text_sensor::TextSensor *sync_mismatch_text_sensor_{nullptr};
   text_sensor::TextSensor *out_of_sync_since_text_sensor_{nullptr};
   time::RealTimeClock *time_id_{nullptr};
+
+  binary_sensor::BinarySensor *thermo_icon_binary_sensor_{nullptr};
+  text_sensor::TextSensor *raw_frame_to_us_text_sensor_{nullptr};
+  text_sensor::TextSensor *raw_frame_other_text_sensor_{nullptr};
+  bool thermo_icon_initialized_{false};
+  int last_thermo_icon_{-1};
+  uint32_t last_thermo_icon_publish_ms_{0};
+  bool raw_to_us_initialized_{false};
+  byte last_raw_to_us_[8]{0};
+  uint32_t last_raw_to_us_publish_ms_{0};
+  bool raw_other_initialized_{false};
+  byte last_raw_other_[8]{0};
+  uint32_t last_raw_other_publish_ms_{0};
 
   // Bus-alive/status threshold (ms) -- carried forward unchanged from 3B.19's fix.
   // This project's own history found 1-3s quiet gaps are normal on this bus; a

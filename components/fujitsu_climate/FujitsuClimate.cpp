@@ -269,6 +269,55 @@ void FujitsuClimate::update_bus_status_() {
       this->raw_frame_text_sensor_->publish_state(buf);
     }
   }
+
+  // 4 Oct 2026 (4A.9) -- Thermo Sensor icon + the two frame types published separately.
+  // Same change-gate + 250ms throttle pattern as every diagnostic above. Unlike the
+  // old mixed raw_frame these only change on real changes (room-temp bit churn aside),
+  // so HA's own history of them doubles as the bit-change journal for defrost hunting.
+  if (this->hardware_present_ && this->thermo_icon_binary_sensor_ != nullptr && this->heat_pump.hasToUsFrame()) {
+    int bit = this->heat_pump.getToUsThermoBit() ? 1 : 0;
+    uint32_t now = millis();
+    bool changed = !this->thermo_icon_initialized_ || bit != this->last_thermo_icon_;
+    bool due = (now - this->last_thermo_icon_publish_ms_) > 250;
+    if (changed && (due || !this->thermo_icon_initialized_)) {
+      this->thermo_icon_initialized_ = true;
+      this->last_thermo_icon_ = bit;
+      this->last_thermo_icon_publish_ms_ = now;
+      this->thermo_icon_binary_sensor_->publish_state(bit == 1);
+    }
+  }
+
+  if (this->hardware_present_ && this->raw_frame_to_us_text_sensor_ != nullptr && this->heat_pump.hasToUsFrame()) {
+    byte *frame = this->heat_pump.getLastToUsFrame();
+    uint32_t now = millis();
+    bool changed = !this->raw_to_us_initialized_ || memcmp(frame, this->last_raw_to_us_, 8) != 0;
+    bool due = (now - this->last_raw_to_us_publish_ms_) > 250;
+    if (changed && (due || !this->raw_to_us_initialized_)) {
+      this->raw_to_us_initialized_ = true;
+      memcpy(this->last_raw_to_us_, frame, 8);
+      this->last_raw_to_us_publish_ms_ = now;
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%02X %02X %02X %02X %02X %02X %02X %02X", frame[0], frame[1], frame[2], frame[3],
+               frame[4], frame[5], frame[6], frame[7]);
+      this->raw_frame_to_us_text_sensor_->publish_state(buf);
+    }
+  }
+
+  if (this->hardware_present_ && this->raw_frame_other_text_sensor_ != nullptr && this->heat_pump.hasOtherFrame()) {
+    byte *frame = this->heat_pump.getLastOtherFrame();
+    uint32_t now = millis();
+    bool changed = !this->raw_other_initialized_ || memcmp(frame, this->last_raw_other_, 8) != 0;
+    bool due = (now - this->last_raw_other_publish_ms_) > 250;
+    if (changed && (due || !this->raw_other_initialized_)) {
+      this->raw_other_initialized_ = true;
+      memcpy(this->last_raw_other_, frame, 8);
+      this->last_raw_other_publish_ms_ = now;
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%02X %02X %02X %02X %02X %02X %02X %02X", frame[0], frame[1], frame[2], frame[3],
+               frame[4], frame[5], frame[6], frame[7]);
+      this->raw_frame_other_text_sensor_->publish_state(buf);
+    }
+  }
 }
 
 void FujitsuClimate::update_climate_state_() {
@@ -506,6 +555,11 @@ void FujitsuClimate::set_control_enabled(bool enabled) {
   this->control_enabled_ = enabled;
   ESP_LOGW(TAG, "Aircon control %s", enabled ? "ENABLED -- HA commands will now be sent to the real unit"
                                               : "disabled -- back to read-only monitoring");
+}
+
+void FujitsuClimate::set_thermo_write_test(bool enabled) {
+  this->heat_pump.setThermoWriteTest(enabled);
+  ESP_LOGW(TAG, "Thermo Sensor WRITE TEST %s", enabled ? "ENABLED -- replies now set byte 5 bit 7" : "disabled");
 }
 
 climate::ClimateTraits FujitsuClimate::traits() {
