@@ -55,6 +55,8 @@ exist. If the ESP32 and the wired controller ever disagree, the wired controller
 is the one that should win. This governs every design decision in the transmit (control)
 path.
 
+The ESP32 is a **secondary (slave) controller**, and live control is **on by default**. "Never the boss" means the wired controller always wins a disagreement, not that control is disabled. The "Aircon Control Enabled" switch is an override that can drop the ESP32 back to read-only at any time.
+
 ---
 
 ## Hardware
@@ -95,7 +97,8 @@ path.
   climate entity's `fan_mode` and a dedicated HA `select` entity.
 - **Control from Home Assistant** — power, mode, target temperature, fan speed, and
   Economy mode have all been exercised live via the HA API against the real unit, gated
-  behind an explicit, default-off "Aircon Control Enabled" kill switch. See
+  behind an "Aircon Control Enabled" switch that is **on by default** (restored on every boot);
+  turn it off at any time from HA or the web UI to drop back to read-only monitoring. See
   `state-of-play.md`'s "4A" sessions for the live-confirmation history of each field.
 - **Diagnostic sensors** — IP address, WiFi signal strength, uptime, free heap, bus
   status/alive, status LED pattern.
