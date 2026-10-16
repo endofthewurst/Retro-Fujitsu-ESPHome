@@ -111,3 +111,25 @@ icon state differs from what an automation expects.
 
 Open: A6 -- keep the Write Test switch (useful: remote "own sensor off"); the Experiment select
 is no longer needed and can be removed in the next flash.
+
+## Addendum 3 — Experiments repeated with the icon ON (James, 17 Oct 2026, ~11:12 NZDT)
+
+James repeated the six 4A.11 experiments with the icon set ON via the wired remote's Thermo
+Sensor button (hand-run from the HA select; not re-timed from HA history).
+
+| Option | Nibble sent | Icon ON -> |
+|---|---|---|
+| Pulse x1 (OR 0x8) | `0xA`, 1 reply | **turned OFF**, did not return |
+| Pulse x5 (OR 0x8) | `0xA`, 5 replies | **turned OFF**, did not return |
+| Held: nibble = 0x8 | `0x8` | **turned OFF**, did not return |
+| Held: nibble = 0x0 | `0x0` | no change (confirmed by James) |
+| Held: OR 0x4 | `0x6` | no change (confirmed by James) |
+| Held: OR 0x1 | `0x3` | no change (confirmed by James) |
+
+- Only the options whose reply nibble contains `0x8` (byte 5 bit 7) clear the icon. Bit 7 alone
+  is the trigger: nibble `0x8` works without our usual `0x2`, and a single reply (Pulse x1) is
+  enough, so it is not a held override.
+- Combined with the icon-OFF runs earlier (Addendum 2: all six variants left the icon off), the
+  field is one-way: bit 7 in our STATUS reply clears the Thermo Sensor icon; nothing in the
+  nibble sets it. The unit never restores the icon itself; only the wired remote button does.
+- A6 stands: keep the Write Test switch; the Experiment select can be removed next flash.
