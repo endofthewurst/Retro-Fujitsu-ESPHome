@@ -80,3 +80,34 @@ James confirmed he restored the icon each time with the wired remote's Thermo Se
   at a time, switch default-off): single-frame pulse instead of a held bit; the other bits of the
   same nibble (updateMagic 0x01/0x02/0x04) in our reply; other message types. Alternative is to
   accept "off only" and add an HA-side advisory.
+
+## Addendum 2 — Firmware 4A.11: trying to turn the icon ON (17 Oct 2026, ~20:03-20:06 UTC)
+
+4A.11 adds the "Thermo Sensor Experiment" select (default Off, never restored): replaces/ORs
+values into the updateMagic nibble (byte 5 bits 7:4) of our STATUS replies. Our normal reply
+nibble is `0x2`; the unit's own frame-to-us carries `0x8` with the icon on, `0x0` off. Flashed by
+OTA (compile stamp 08:56:51 NZDT). All runs started with the wired remote's icon OFF and the unit
+heating; results read from the icon sensor + `raw_frame_to_us` at ~0.4 s resolution:
+
+| Option | Nibble sent | Result |
+|---|---|---|
+| Pulse x1 (OR 0x8) | `0xA`, 1 reply (select reset after ~1 s) | icon stayed off |
+| Pulse x5 (OR 0x8) | `0xA`, 5 replies (reset after ~4 s) | icon stayed off |
+| Held: nibble = 0x8 | `0x8`, 12 s | icon stayed off |
+| Held: nibble = 0x0 | `0x0`, 12 s | icon stayed off |
+| Held: OR 0x4 | `0x6`, 12 s | icon stayed off |
+| Held: OR 0x1 | `0x3`, 12 s | icon stayed off |
+
+Bus status, Bus Alive, In Sync and the climate state were unchanged throughout; no fault on the
+wired controller. STATUS replies go out about once a second.
+
+**Conclusion for A5:** writing the updateMagic nibble in our STATUS replies can only CLEAR the
+Thermo Sensor icon (0x8 bit set while the icon is showing, ~1.3 s, one-shot); none of the six
+variants above sets it. Turning it on from HA is not possible through this field. Remaining
+avenues are other message types or frame fields (only reachable by emulating the wired
+controller, which is NOT recommended -- "never the boss"), so the working plan is: keep the
+off-only control (Thermo Sensor Write Test switch) and, if wanted, an HA-side advisory when the
+icon state differs from what an automation expects.
+
+Open: A6 -- keep the Write Test switch (useful: remote "own sensor off"); the Experiment select
+is no longer needed and can be removed in the next flash.
