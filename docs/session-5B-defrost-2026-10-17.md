@@ -52,3 +52,31 @@ fan stopping. HA history of the two raw-frame sensors (`sensor.living_room_airco
 | B3 | `defrost_active` sensor | Done in 4A.10 (pending flash verification) |
 | B4 | Validate on a second cold cycle with the sensor timestamping it; note whether Oil Recovery also sets it | Open |
 | B5 | Use the flag in RoomMind / HA (exclude defrost + ~2 min hold-off from learning and control) | Open |
+## Addendum — Thermo Sensor Write Test now turns the icon OFF (17 Oct 2026, ~19:46-19:47 UTC)
+
+First positive write result for A5. With 4A.10 running and the wired remote's Thermo Sensor icon
+showing, James turned on `switch.living_room_aircon_thermo_sensor_write_test` (sets byte 5 bit 7
+in our STATUS replies). HA history (icon sensor, frame to us, switch):
+
+| Switch on (UTC) | Icon at the time | Result |
+|---|---|---|
+| 19:46:49.8 | on | icon off 19:46:51.1 (+1.35 s); frame byte 5 `84` -> `04` |
+| 19:47:02.0 | off | no change |
+| 19:47:21.3 | on | icon off 19:47:22.7 (+1.39 s) |
+| 19:47:34.0 | on | icon off 19:47:35.2 (+1.16 s) |
+
+James confirmed he restored the icon each time with the wired remote's Thermo Sensor button
+(19:47:16, :27, :38). The unit never turned it back on by itself.
+
+- **One direction only:** HA can switch the icon off but cannot switch it on (same as the 4 Oct
+  negative result, which was run with the icon already off).
+- **Behaves like a one-shot, not a held override:** the icon stayed on after a remote press at
+  19:47:27.7 while the switch was still on, so a level-sensitive "bit set = force off" is
+  refuted. The ~1.2-1.4 s latency suggests one bus exchange.
+- Not a toggle (a toggle would have turned the icon on in the icon-off cases).
+- Meaning of the setting still per 3 Oct: icon shown = wired controller's own sensor in use. What
+  the setting actually changes (A4) is still open.
+- Open for A5: how to turn the icon ON from the secondary. Candidate experiments (one variable
+  at a time, switch default-off): single-frame pulse instead of a held bit; the other bits of the
+  same nibble (updateMagic 0x01/0x02/0x04) in our reply; other message types. Alternative is to
+  accept "off only" and add an HA-side advisory.
