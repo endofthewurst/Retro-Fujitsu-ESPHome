@@ -559,6 +559,20 @@ climate::ClimateTraits FujitsuClimate::traits() {
   return traits;
 }
 
+// 17 Oct 2026 (4A.11) -- map the HA select's option text to an experiment. One variable at a
+// time by construction (a select can only hold one option). Unknown text = off.
+void FujitsuClimate::set_thermo_experiment(const std::string &option) {
+  uint8_t mode = 0, value = 0, pulse = 0;
+  if (option == "Pulse x1 (OR 0x8)") { mode = 1; value = 0x08; pulse = 1; }
+  else if (option == "Pulse x5 (OR 0x8)") { mode = 1; value = 0x08; pulse = 5; }
+  else if (option == "Held: nibble = 0x8") { mode = 2; value = 0x08; }
+  else if (option == "Held: nibble = 0x0") { mode = 2; value = 0x00; }
+  else if (option == "Held: OR 0x4") { mode = 1; value = 0x04; }
+  else if (option == "Held: OR 0x1") { mode = 1; value = 0x01; }
+  this->heat_pump.setThermoExperiment(mode, value, pulse);
+  ESP_LOGW(TAG, "Thermo experiment: '%s' (mode=%u value=0x%X pulse=%u)", option.c_str(), mode, value, pulse);
+}
+
 void FujitsuClimate::control(const climate::ClimateCall &call) {
   // Kill switch, per hardware-and-protocol.md's "ESP32 is never the boss" design
   // principle. This is the first time this project's control() path has ever been

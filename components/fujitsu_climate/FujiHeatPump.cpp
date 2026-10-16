@@ -289,8 +289,29 @@ bool FujiHeatPump::waitForFrame() {
       // 4 Oct 2026 (4A.9) -- EXPERIMENTAL Thermo Sensor write test (default off). See
       // thermoWriteTest in FujiHeatPump.h. updateMagic occupies byte 5 bits 7:4, so
       // |= 0x08 sets byte 5 bit 7 on the wire.
-      if (thermoWriteTest && ff.messageType == static_cast<byte>(FujiMessageType::STATUS)) {
-        ff.updateMagic |= 0x08;
+      // 17 Oct 2026 (4A.11) -- thermoExp* experiment (select in HA) takes precedence over
+      // the plain write-test switch when active; see FujiHeatPump.h.
+      if (ff.messageType == static_cast<byte>(FujiMessageType::STATUS)) {
+        uint8_t expMode = thermoExpMode;
+        if (expMode != 0) {
+          uint8_t v = thermoExpValue & 0x0F;
+          if (expMode == 1) {
+            ff.updateMagic |= v;
+          } else {
+            ff.updateMagic = v;
+          }
+          uint8_t pulse = thermoExpPulse;
+          if (pulse > 0) {
+            pulse = pulse - 1;
+            thermoExpPulse = pulse;
+            if (pulse == 0) {
+              thermoExpMode = 0;
+              thermoExpFinished = true;
+            }
+          }
+        } else if (thermoWriteTest) {
+          ff.updateMagic |= 0x08;
+        }
       }
 
       encodeFrame(ff);

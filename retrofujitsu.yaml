@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.10"
+    version: "4A.11"
   on_boot:
     priority: 600
     then:
@@ -286,6 +286,30 @@ select:
           else if (x == "High") m = climate::CLIMATE_FAN_HIGH;
           id(fujitsu_hp).make_call().set_fan_mode(m).perform();
 
+  # 17 Oct 2026 (4A.11) -- EXPERIMENTAL: which value of the updateMagic nibble in our STATUS
+  # replies can turn the wired controller's Thermo Sensor icon ON (the Write Test switch only
+  # turns it OFF). One option at a time; always starts at Off, never restored. Pulse options
+  # reset themselves to Off when finished. Start with the icon OFF, pick an option, watch
+  # "Thermo Sensor Icon", then set back to Off.
+  - platform: template
+    name: "Thermo Sensor Experiment"
+    id: thermo_experiment
+    icon: "mdi:flask-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: false
+    initial_option: "Off"
+    options:
+      - "Off"
+      - "Pulse x1 (OR 0x8)"
+      - "Pulse x5 (OR 0x8)"
+      - "Held: nibble = 0x8"
+      - "Held: nibble = 0x0"
+      - "Held: OR 0x4"
+      - "Held: OR 0x1"
+    set_action:
+      - lambda: 'id(fujitsu_hp)->set_thermo_experiment(x);'
+
 # Text sensors
 text_sensor:
   - platform: wifi_info
@@ -453,6 +477,13 @@ button:
 
 # Diagnostic interval
 interval:
+  # 4A.11 -- lets a finished pulse experiment put the Thermo Sensor Experiment select back to Off.
+  - interval: 500ms
+    then:
+      - lambda: |-
+          if (id(fujitsu_hp)->take_thermo_exp_finished()) {
+            id(thermo_experiment)->publish_state("Off");
+          }
   - interval: 300s
     then:
       - logger.log:

@@ -121,6 +121,9 @@ class FujitsuClimate : public climate::Climate, public Component {
   void set_raw_frame_to_us_text_sensor(text_sensor::TextSensor *s) { raw_frame_to_us_text_sensor_ = s; }
   void set_raw_frame_other_text_sensor(text_sensor::TextSensor *s) { raw_frame_other_text_sensor_ = s; }
   void set_thermo_write_test(bool enabled);
+  // 17 Oct 2026 (4A.11) -- Thermo Sensor write experiments (HA select). See FujiHeatPump.h.
+  void set_thermo_experiment(const std::string &option);
+  bool take_thermo_exp_finished() { return heat_pump.takeThermoExpFinished(); }
   // 17 Oct 2026 (4A.10) -- Defrost / Oil Recovery active (see FujitsuClimate.cpp).
   void set_defrost_binary_sensor(binary_sensor::BinarySensor *s) { defrost_binary_sensor_ = s; }
 

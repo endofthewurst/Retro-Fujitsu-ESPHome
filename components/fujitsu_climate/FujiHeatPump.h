@@ -166,6 +166,18 @@ class FujiHeatPump {
   // main/API thread, read from the bus task -- a plain volatile bool is enough.
   volatile bool thermoWriteTest = false;
 
+  // 17 Oct 2026 (4A.11) -- EXPERIMENTAL Thermo Sensor write experiments (default off, never
+  // restored). The 4A.10 live test showed thermoWriteTest (|= 0x08 on updateMagic) turns the
+  // icon OFF (one-shot, ~1.3 s) but cannot turn it ON. These probe other values of the
+  // updateMagic nibble in our STATUS replies. mode: 0 = off, 1 = OR value into updateMagic,
+  // 2 = REPLACE updateMagic with value. pulse: 0 = held, N = apply to the next N STATUS
+  // replies then stop (thermoExpFinished is set so the HA select can reset itself).
+  // Written from the main thread (mode LAST), read from the bus task.
+  volatile uint8_t thermoExpMode = 0;
+  volatile uint8_t thermoExpValue = 0;
+  volatile uint8_t thermoExpPulse = 0;
+  volatile bool thermoExpFinished = false;
+
   FujiFrame decodeFrame();
   void encodeFrame(FujiFrame ff);
   void printFrame(byte buf[8], FujiFrame ff);
@@ -239,6 +251,18 @@ class FujiHeatPump {
   bool getToUsThermoBit() { return (lastToUsFrame[5] & 0x80) != 0; }
   void setThermoWriteTest(bool v) { thermoWriteTest = v; }
   bool getThermoWriteTest() { return thermoWriteTest; }
+  void setThermoExperiment(uint8_t mode, uint8_t value, uint8_t pulse) {
+    thermoExpMode = 0;
+    thermoExpFinished = false;
+    thermoExpValue = value;
+    thermoExpPulse = pulse;
+    thermoExpMode = mode;
+  }
+  bool takeThermoExpFinished() {
+    bool f = thermoExpFinished;
+    thermoExpFinished = false;
+    return f;
+  }
 
   FujiFrame *getCurrentState();
   FujiFrame *getUpdateState();
