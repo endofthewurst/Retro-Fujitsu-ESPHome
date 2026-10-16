@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.9"
+    version: "4A.10"
   on_boot:
     priority: 600
     then:
@@ -327,26 +327,14 @@ text_sensor:
     lambda: |-
       return id(status_light).get_effect_name();
 
-  # Trimmed to bus_status in Phase 4 -- see components/fujitsu_climate/text_sensor.py
-  # for why the other exploratory diagnostics were retired. thermo_sensor re-added
-  # 20 Aug 2026, explicitly labelled unconfirmed -- see text_sensor.py's comment.
-  # unknown_bit added 21 Aug 2026 -- a second live-test candidate (FujiFrame::unknownBit)
-  # after controllerPresent/thermo_sensor was ruled out by two USB-tethered live tests
-  # the same day. Also explicitly unconfirmed -- see text_sensor.py's comment.
+  # Trimmed to bus_status in Phase 4 -- see components/fujitsu_climate/text_sensor.py.
+  # 17 Oct 2026 (4A.10): the thermo_sensor / unknown_bit / raw_frame "unconfirmed" sensors
+  # were retired (refuted/noisy). Swing (unconfirmed) kept.
   - platform: fujitsu_climate
     fujitsu_climate_id: fujitsu_hp
     bus_status:
       name: "Bus Status"
       id: bus_status
-    thermo_sensor:
-      name: "Thermo Sensor (unconfirmed)"
-      id: thermo_sensor
-    unknown_bit:
-      name: "Unknown Frame Bit (unconfirmed)"
-      id: unknown_bit
-    raw_frame:
-      name: "Raw Frame (unconfirmed)"
-      id: raw_frame
     swing:
       name: "Swing (unconfirmed)"
       id: swing
@@ -393,6 +381,11 @@ binary_sensor:
     thermo_icon:
       name: "Thermo Sensor Icon"
       id: thermo_icon
+    # 17 Oct 2026 (4A.10) -- Defrost / Oil Recovery active (byte 2 bit 3 of the frame not
+    # addressed to us; matched to the wired controller's icon in a live test). Debounced 3 s.
+    defrost_active:
+      name: "Defrost Active"
+      id: defrost_active
 
 # Switches
 switch:

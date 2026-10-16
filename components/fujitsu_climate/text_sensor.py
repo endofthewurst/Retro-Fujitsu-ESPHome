@@ -7,9 +7,6 @@ from . import FujitsuClimate
 
 CONF_FUJITSU_CLIMATE_ID = "fujitsu_climate_id"
 CONF_BUS_STATUS = "bus_status"
-CONF_THERMO_SENSOR = "thermo_sensor"
-CONF_UNKNOWN_BIT = "unknown_bit"
-CONF_RAW_FRAME = "raw_frame"
 CONF_SWING = "swing"
 CONF_RAW_FRAME_TO_US = "raw_frame_to_us"
 CONF_RAW_FRAME_OTHER = "raw_frame_other"
@@ -47,18 +44,6 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_BUS_STATUS): text_sensor.text_sensor_schema(
             entity_category="diagnostic",
         ),
-        cv.Optional(CONF_THERMO_SENSOR): text_sensor.text_sensor_schema(
-            entity_category="diagnostic",
-            icon="mdi:help-circle-outline",
-        ),
-        cv.Optional(CONF_UNKNOWN_BIT): text_sensor.text_sensor_schema(
-            entity_category="diagnostic",
-            icon="mdi:help-circle-outline",
-        ),
-        cv.Optional(CONF_RAW_FRAME): text_sensor.text_sensor_schema(
-            entity_category="diagnostic",
-            icon="mdi:code-braces",
-        ),
         cv.Optional(CONF_RAW_FRAME_TO_US): text_sensor.text_sensor_schema(
             entity_category="diagnostic",
             icon="mdi:code-braces",
@@ -90,16 +75,7 @@ async def to_code(config):
     if CONF_BUS_STATUS in config:
         sens = await text_sensor.new_text_sensor(config[CONF_BUS_STATUS])
         cg.add(parent.set_bus_status_text_sensor(sens))
-    if CONF_THERMO_SENSOR in config:
-        sens = await text_sensor.new_text_sensor(config[CONF_THERMO_SENSOR])
-        cg.add(parent.set_thermo_sensor_text_sensor(sens))
-    if CONF_UNKNOWN_BIT in config:
-        sens = await text_sensor.new_text_sensor(config[CONF_UNKNOWN_BIT])
-        cg.add(parent.set_unknown_bit_text_sensor(sens))
 
-    if CONF_RAW_FRAME in config:
-        sens = await text_sensor.new_text_sensor(config[CONF_RAW_FRAME])
-        cg.add(parent.set_raw_frame_text_sensor(sens))
 
     if CONF_RAW_FRAME_TO_US in config:
         sens = await text_sensor.new_text_sensor(config[CONF_RAW_FRAME_TO_US])

@@ -8,6 +8,7 @@ CONF_FUJITSU_CLIMATE_ID = "fujitsu_climate_id"
 CONF_BUS_ALIVE = "bus_alive"
 CONF_IN_SYNC = "in_sync"
 CONF_THERMO_ICON = "thermo_icon"
+CONF_DEFROST_ACTIVE = "defrost_active"
 
 # Restructured 2 Sep 2026 (from a single flat schema) to a nested schema, matching
 # text_sensor.py's existing pattern -- needed so a second binary_sensor, "In Sync"
@@ -34,6 +35,11 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:thermometer-auto",
         ),
+        # 17 Oct 2026 (4A.10): byte 2 bit 3 of the frame not addressed to us. On = the wired
+        # controller's Defrost / Oil Recovery icon is shown. Debounced in FujitsuClimate.cpp.
+        cv.Optional(CONF_DEFROST_ACTIVE): binary_sensor.binary_sensor_schema(
+            icon="mdi:snowflake-melt",
+        ),
     }
 )
 
@@ -49,3 +55,6 @@ async def to_code(config):
     if CONF_THERMO_ICON in config:
         sens = await binary_sensor.new_binary_sensor(config[CONF_THERMO_ICON])
         cg.add(parent.set_thermo_icon_binary_sensor(sens))
+    if CONF_DEFROST_ACTIVE in config:
+        sens = await binary_sensor.new_binary_sensor(config[CONF_DEFROST_ACTIVE])
+        cg.add(parent.set_defrost_binary_sensor(sens))

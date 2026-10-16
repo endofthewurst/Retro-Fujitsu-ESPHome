@@ -37,6 +37,11 @@
 // update_sync_status_() below for the full logic. control() now snapshots the
 // complete requested_* target on every real HA command; update_climate_state_()
 // calls update_sync_status_() every tick with the same decoded frame it just used.
+//
+// 17 Oct 2026 (4A.10): retired the thermo_sensor / unknown_bit / raw_frame "unconfirmed"
+// text sensors (refuted/noisy; superseded by the Thermo Sensor Icon binary_sensor and the
+// split raw_frame_to_us / raw_frame_other sensors). Swing kept at James's request. Added
+// the Defrost Active binary_sensor -- see update_bus_status_() below.
 // ---------------------------------------------------------------------------
 
 namespace esphome {
@@ -180,56 +185,6 @@ void FujitsuClimate::update_bus_status_() {
     }
   }
 
-  // 20 Aug 2026 -- passive, unconfirmed diagnostic. See FujiHeatPump.h's Deviation #3
-  // and this file's top-of-file comment: this is the old "Mystery Bit"
-  // (frame[6] bit0 / controllerPresent), read directly off the incoming frame before
-  // our own reply logic reuses that field, but its mapping to the UTY-RNNUM's Thermo
-  // Sensor Local/Remote setting was never confirmed across four rounds of live
-  // testing (test-and-dev-workflow.md) -- reported here as a raw bit, not a label.
-  // 2 Sep 2026 -- found oscillating continuously on bus connect with no button press at
-  // all, with no throttle on this path (unlike raw_frame's, added 21 Aug below) -- a
-  // live crash-precursor risk (state-of-play.md's "2 September 2026" section), not just
-  // an open decode question. Throttled to 250ms here, mirroring raw_frame's own fix, on
-  // top of the existing change-gate. 3 Sep 2026: James re-tested the physical Thermo
-  // Sensor button against this diagnostic and Unknown Frame Bit below -- no change in
-  // either on this pass, unlike the 2 Sep session where pressing it seemed to stop the
-  // oscillation. That correlation now looks coincidental rather than causal; the
-  // underlying icon-vs-bit mapping is still unconfirmed (see the "Correction, 1
-  // September 2026" section in state-of-play.md) and unaffected by this throttle fix,
-  // which only bounds publish rate, not the decode itself.
-  if (this->hardware_present_ && this->thermo_sensor_text_sensor_ != nullptr) {
-    int bit = this->heat_pump.getLastRawControllerPresent();
-    uint32_t now = millis();
-    bool changed = !this->thermo_sensor_initialized_ || bit != this->last_thermo_sensor_bit_;
-    bool due = (now - this->last_thermo_sensor_publish_ms_) > 250;
-    if (changed && (due || !this->thermo_sensor_initialized_)) {
-      this->thermo_sensor_initialized_ = true;
-      this->last_thermo_sensor_bit_ = bit;
-      this->last_thermo_sensor_publish_ms_ = now;
-      this->thermo_sensor_text_sensor_->publish_state(bit ? "1 (unconfirmed)" : "0 (unconfirmed)");
-    }
-  }
-
-  // 21 Aug 2026 -- second passive/unconfirmed diagnostic, for FujiFrame::unknownBit
-  // (readBuf[1] bit 7). Never exposed before today -- added as a live-test candidate
-  // for the Thermo Sensor setting after controllerPresent was ruled out (two
-  // USB-tethered live tests, same day, zero correlation with the physical button).
-  // Same passive capture point/reasoning, same change-gated publish pattern.
-  // 2 Sep 2026 -- same unthrottled-hot-path risk and same 250ms throttle fix as
-  // thermo_sensor above.
-  if (this->hardware_present_ && this->unknown_bit_text_sensor_ != nullptr) {
-    int bit = this->heat_pump.getLastRawUnknownBit();
-    uint32_t now = millis();
-    bool changed = !this->unknown_bit_initialized_ || bit != this->last_unknown_bit_;
-    bool due = (now - this->last_unknown_bit_publish_ms_) > 250;
-    if (changed && (due || !this->unknown_bit_initialized_)) {
-      this->unknown_bit_initialized_ = true;
-      this->last_unknown_bit_ = bit;
-      this->last_unknown_bit_publish_ms_ = now;
-      this->unknown_bit_text_sensor_->publish_state(bit ? "1 (unconfirmed)" : "0 (unconfirmed)");
-    }
-  }
-
   // 10 Sep 2026 -- Swing diagnostic (FujiHeatPump::getSwingMode(), byte 5 bit 2).
   // Decoded upstream but never live-tested before now -- see hardware-and-protocol.md
   // and state-of-play.md's "What is decoded" table. Same passive/unconfirmed
@@ -244,29 +199,6 @@ void FujitsuClimate::update_bus_status_() {
       this->last_swing_bit_ = bit;
       this->last_swing_publish_ms_ = now;
       this->swing_text_sensor_->publish_state(bit ? "On (unconfirmed)" : "Off (unconfirmed)");
-    }
-  }
-
-  // 21 Aug 2026 -- full raw frame diagnostic (see FujiHeatPump.h's lastRawFrame).
-  // Throttled to at most one publish every 250ms on top of the change-gate below --
-  // unlike the single-bit diagnostics above, this changes on almost every valid
-  // frame during normal operation (temperature/updateMagic churn alone would do
-  // it), so an un-throttled change-gate here would reproduce exactly the
-  // unthrottled hot-path publish pattern this project's prior crashes trace back
-  // to. 250ms bounds it to ~4/s even during a Thermo Sensor-style oscillation burst.
-  if (this->hardware_present_ && this->raw_frame_text_sensor_ != nullptr) {
-    byte *frame = this->heat_pump.getLastRawFrame();
-    uint32_t now = millis();
-    bool changed = !this->raw_frame_initialized_ || memcmp(frame, this->last_raw_frame_, 8) != 0;
-    bool due = (now - this->last_raw_frame_publish_ms_) > 250;
-    if (changed && (due || !this->raw_frame_initialized_)) {
-      this->raw_frame_initialized_ = true;
-      memcpy(this->last_raw_frame_, frame, 8);
-      this->last_raw_frame_publish_ms_ = now;
-      char buf[24];
-      snprintf(buf, sizeof(buf), "%02X %02X %02X %02X %02X %02X %02X %02X",
-               frame[0], frame[1], frame[2], frame[3], frame[4], frame[5], frame[6], frame[7]);
-      this->raw_frame_text_sensor_->publish_state(buf);
     }
   }
 
@@ -316,6 +248,36 @@ void FujitsuClimate::update_bus_status_() {
       snprintf(buf, sizeof(buf), "%02X %02X %02X %02X %02X %02X %02X %02X", frame[0], frame[1], frame[2], frame[3],
                frame[4], frame[5], frame[6], frame[7]);
       this->raw_frame_other_text_sensor_->publish_state(buf);
+    }
+  }
+
+  // 17 Oct 2026 (4A.10) -- Defrost / Oil Recovery active. Byte 2 bit 3 of the frame NOT
+  // addressed to us (unit -> primary, "other" frame) tracks the wired controller's
+  // Defrost/Oil Recovery icon: set for the whole cycle, clear when it ends (live test,
+  // 17 Oct 2026: 08 at 19:22:22 UTC, back to 00 at 19:28:53 UTC, ~6.5 min, matching the
+  // icon). One cycle observed so far; defrost and oil recovery share the icon so this
+  // flags both. The same bit blips briefly at power transitions, so the state only flips
+  // once the raw bit has been stable for DEFROST_DEBOUNCE_MS. If the bus is not alive
+  // the sensor is forced off (ESPHome 2025.4.2 has no invalidate_state()) so a stale
+  // "on" can't outlive the bus. Single-byte read, atomic against the bus task.
+  if (this->hardware_present_ && this->defrost_binary_sensor_ != nullptr) {
+    uint32_t dnow = millis();
+    bool raw = alive && this->heat_pump.hasOtherFrame() && (this->heat_pump.getLastOtherFrame()[2] & 0x08) != 0;
+    if (!this->defrost_initialized_) {
+      this->defrost_initialized_ = true;
+      this->defrost_candidate_ = raw;
+      this->defrost_candidate_since_ms_ = dnow;
+      this->defrost_state_ = false;
+      this->defrost_binary_sensor_->publish_state(false);
+    }
+    if (raw != this->defrost_candidate_) {
+      this->defrost_candidate_ = raw;
+      this->defrost_candidate_since_ms_ = dnow;
+    } else if (this->defrost_candidate_ != this->defrost_state_ &&
+               (dnow - this->defrost_candidate_since_ms_) >= DEFROST_DEBOUNCE_MS) {
+      this->defrost_state_ = this->defrost_candidate_;
+      this->defrost_binary_sensor_->publish_state(this->defrost_state_);
+      ESP_LOGI(TAG, "Defrost/oil-recovery %s", this->defrost_state_ ? "ACTIVE" : "ended");
     }
   }
 }

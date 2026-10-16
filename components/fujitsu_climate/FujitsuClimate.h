@@ -103,18 +103,10 @@ class FujitsuClimate : public climate::Climate, public Component {
   void set_bus_status_text_sensor(text_sensor::TextSensor *s) { bus_status_text_sensor_ = s; }
   void set_corrected_setpoint_sensor(sensor::Sensor *s) { corrected_setpoint_sensor_ = s; }
   void set_corrected_room_temp_sensor(sensor::Sensor *s) { corrected_room_temp_sensor_ = s; }
-  // 20 Aug 2026 -- see the file-header comment above and FujiHeatPump.h's Deviation #3.
-  void set_thermo_sensor_text_sensor(text_sensor::TextSensor *s) { thermo_sensor_text_sensor_ = s; }
-  // 21 Aug 2026 -- see FujiHeatPump.h's lastRawUnknownBit. Second live-test
-  // candidate after controllerPresent, same passive/unconfirmed treatment.
-  void set_unknown_bit_text_sensor(text_sensor::TextSensor *s) { unknown_bit_text_sensor_ = s; }
-  // 21 Aug 2026 -- full raw frame diagnostic. See FujiHeatPump.h's lastRawFrame.
-  void set_raw_frame_text_sensor(text_sensor::TextSensor *s) { raw_frame_text_sensor_ = s; }
   // 10 Sep 2026 -- Swing diagnostic. Decoded upstream (byte 5 bit 2,
   // FujiHeatPump::getSwingMode()) but never live-tested against a real button press
   // before now -- see hardware-and-protocol.md's field table and state-of-play.md's
-  // "What is decoded" table ("Swing: Not yet tested live"). Same passive/unconfirmed
-  // treatment as thermo_sensor/unknown_bit above.
+  // "What is decoded" table ("Swing: Not yet tested live"). Passive/unconfirmed.
   void set_swing_text_sensor(text_sensor::TextSensor *s) { swing_text_sensor_ = s; }
 
   // 2 Sep 2026 -- requested-vs-actual state sync. See the file-header comment above.
@@ -129,6 +121,8 @@ class FujitsuClimate : public climate::Climate, public Component {
   void set_raw_frame_to_us_text_sensor(text_sensor::TextSensor *s) { raw_frame_to_us_text_sensor_ = s; }
   void set_raw_frame_other_text_sensor(text_sensor::TextSensor *s) { raw_frame_other_text_sensor_ = s; }
   void set_thermo_write_test(bool enabled);
+  // 17 Oct 2026 (4A.10) -- Defrost / Oil Recovery active (see FujitsuClimate.cpp).
+  void set_defrost_binary_sensor(binary_sensor::BinarySensor *s) { defrost_binary_sensor_ = s; }
 
   // Public so the free-standing task function (fujitsu_bus_task, in the .cpp) can
   // reach it -- matches the reference esphome-fujitsu wrapper's own pattern
@@ -156,9 +150,6 @@ class FujitsuClimate : public climate::Climate, public Component {
   text_sensor::TextSensor *bus_status_text_sensor_{nullptr};
   sensor::Sensor *corrected_setpoint_sensor_{nullptr};
   sensor::Sensor *corrected_room_temp_sensor_{nullptr};
-  text_sensor::TextSensor *thermo_sensor_text_sensor_{nullptr};
-  text_sensor::TextSensor *unknown_bit_text_sensor_{nullptr};
-  text_sensor::TextSensor *raw_frame_text_sensor_{nullptr};
   text_sensor::TextSensor *swing_text_sensor_{nullptr};
 
   binary_sensor::BinarySensor *in_sync_binary_sensor_{nullptr};
@@ -178,6 +169,13 @@ class FujitsuClimate : public climate::Climate, public Component {
   bool raw_other_initialized_{false};
   byte last_raw_other_[8]{0};
   uint32_t last_raw_other_publish_ms_{0};
+  // 4A.10 -- Defrost Active debounce state.
+  binary_sensor::BinarySensor *defrost_binary_sensor_{nullptr};
+  bool defrost_initialized_{false};
+  bool defrost_candidate_{false};
+  bool defrost_state_{false};
+  uint32_t defrost_candidate_since_ms_{0};
+  static constexpr uint32_t DEFROST_DEBOUNCE_MS = 3000;
 
   // Bus-alive/status threshold (ms) -- carried forward unchanged from 3B.19's fix.
   // This project's own history found 1-3s quiet gaps are normal on this bus; a
@@ -207,15 +205,6 @@ class FujitsuClimate : public climate::Climate, public Component {
   bool corrected_sensors_initialized_{false};
   float last_corrected_setpoint_{NAN};
   float last_corrected_room_temp_{NAN};
-  bool thermo_sensor_initialized_{false};
-  int last_thermo_sensor_bit_{-1};
-  uint32_t last_thermo_sensor_publish_ms_{0};
-  bool unknown_bit_initialized_{false};
-  int last_unknown_bit_{-1};
-  uint32_t last_unknown_bit_publish_ms_{0};
-  bool raw_frame_initialized_{false};
-  byte last_raw_frame_[8]{0};
-  uint32_t last_raw_frame_publish_ms_{0};
   bool swing_initialized_{false};
   int last_swing_bit_{-1};
   uint32_t last_swing_publish_ms_{0};
