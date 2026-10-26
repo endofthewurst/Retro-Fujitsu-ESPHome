@@ -54,6 +54,7 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/time/real_time_clock.h"
+#include "esphome/components/event/event.h"
 
 #include "FujiHeatPump.h"
 
@@ -126,6 +127,10 @@ class FujitsuClimate : public climate::Climate, public Component {
   bool take_thermo_exp_finished() { return heat_pump.takeThermoExpFinished(); }
   // 17 Oct 2026 (4A.10) -- Defrost / Oil Recovery active (see FujitsuClimate.cpp).
   void set_defrost_binary_sensor(binary_sensor::BinarySensor *s) { defrost_binary_sensor_ = s; }
+  // 17 Oct 2026 (4A.12) -- control-authority attribution (see control-authority-attribution.md).
+  void set_change_event(event::Event *e) { change_event_ = e; }
+  void set_last_change_source_text_sensor(text_sensor::TextSensor *s) { last_change_source_text_sensor_ = s; }
+  void set_last_change_detail_text_sensor(text_sensor::TextSensor *s) { last_change_detail_text_sensor_ = s; }
 
   // Public so the free-standing task function (fujitsu_bus_task, in the .cpp) can
   // reach it -- matches the reference esphome-fujitsu wrapper's own pattern
@@ -232,6 +237,41 @@ class FujitsuClimate : public climate::Climate, public Component {
   std::string last_sync_mismatch_;
   bool currently_out_of_sync_{false};
   std::string out_of_sync_since_str_;
+
+  // ---- Control-authority attribution (4A.12) --------------------------------
+  // Answers "who just changed the unit's state -- a human at the wired controller, or HA?"
+  // Layered on the requested_* snapshot above: control() records WHICH fields HA set
+  // (attr_pending_mask_) and update_attribution_() judges every decoded-state change
+  // field by field. Firmware only reports; the deference timer/policy lives in HA.
+  static constexpr uint8_t ATTR_POWER = 0x01;
+  static constexpr uint8_t ATTR_MODE = 0x02;
+  static constexpr uint8_t ATTR_SETPOINT = 0x04;
+  static constexpr uint8_t ATTR_FAN = 0x08;
+  // How long after an HA command a change to a commanded field may still be credited
+  // to HA. Tune from live timing.
+  static constexpr uint32_t ATTR_ADOPTION_WINDOW_MS = 8000;
+  // After a power or mode change the unit re-publishes other fields (per-mode setpoint
+  // memory, off-state readings) -- those side effects are re-baselined, not attributed.
+  static constexpr uint32_t ATTR_POWER_QUIET_MS = 3000;
+  static constexpr uint32_t ATTR_MODE_QUIET_MS = 3000;
+
+  event::Event *change_event_{nullptr};
+  text_sensor::TextSensor *last_change_source_text_sensor_{nullptr};
+  text_sensor::TextSensor *last_change_detail_text_sensor_{nullptr};
+
+  bool attr_seeded_{false};
+  bool attr_last_on_{false};
+  FujiMode attr_last_mode_{FujiMode::AUTO};
+  byte attr_last_setpoint_{0};
+  FujiFanMode attr_last_fan_{FujiFanMode::FAN_AUTO};
+  uint8_t attr_pending_mask_{0};
+  bool attr_quiet_all_active_{false};
+  uint32_t attr_quiet_all_start_ms_{0};
+  bool attr_quiet_spfan_active_{false};
+  uint32_t attr_quiet_spfan_start_ms_{0};
+
+  void update_attribution_(const FujiFrame &local);
+  void emit_change_(bool human, const std::string &detail);
 
   climate::ClimateMode fuji_mode_to_climate_mode_(FujiMode mode);
   FujiMode climate_mode_to_fuji_mode_(climate::ClimateMode mode);

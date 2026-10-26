@@ -397,6 +397,9 @@ void FujitsuClimate::update_climate_state_() {
   // same decoded frame this function just processed, so it stays exactly in step
   // with the climate entity's own state -- see update_sync_status_() below.
   this->update_sync_status_(local);
+
+  // 4A.12 -- control-authority attribution, same decoded frame again.
+  this->update_attribution_(local);
 }
 
 void FujitsuClimate::update_sync_status_(const FujiFrame &local) {
@@ -503,6 +506,139 @@ void FujitsuClimate::update_sync_status_(const FujiFrame &local) {
       this->sync_mismatch_text_sensor_->publish_state(mismatch);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// 4A.12 -- control-authority attribution (control-authority-attribution.md).
+//
+// Every decoded-state change is judged FIELD BY FIELD against what HA's last
+// control() call actually set (attr_pending_mask_), so a multi-field HA command that
+// the unit adopts over several frames is credited to HA field by field, and a change
+// to a field HA never touched is, by construction, a human (or unit-initiated) one.
+//   - A pending field reaching its requested value inside the adoption window -> "ha".
+//   - Any other change -> "human" (clears that field's pending bit).
+// Side effects are re-baselined silently rather than attributed: while the unit is off
+// its mode/setpoint/fan readings are unreliable (observed: setpoint reads 16 when off),
+// and a power or mode change makes the unit republish other fields (per-mode setpoint
+// memory), so a short quiet window follows each. A setpoint of 0 / FAN mode carries no
+// setpoint and is never tracked.
+// KNOWN LIMITATION: unit-initiated changes (defrost, thermostat-off, wired-remote timer)
+// are indistinguishable from a human and read as "human"; a human change to a field
+// inside a quiet window is not reported.
+// ---------------------------------------------------------------------------
+void FujitsuClimate::emit_change_(bool human, const std::string &detail) {
+  const char *src = human ? "Human" : "HA";
+  ESP_LOGI(TAG, "Change attributed to %s: %s", src, detail.c_str());
+  // Publish the sensors BEFORE firing the event so an automation triggered by the event
+  // reads the matching source/detail rather than the previous change's.
+  if (this->last_change_source_text_sensor_ != nullptr) {
+    this->last_change_source_text_sensor_->publish_state(src);
+  }
+  if (this->last_change_detail_text_sensor_ != nullptr) {
+    this->last_change_detail_text_sensor_->publish_state(detail);
+  }
+  if (this->change_event_ != nullptr) {
+    this->change_event_->trigger(human ? "human" : "ha");
+  }
+}
+
+void FujitsuClimate::update_attribution_(const FujiFrame &local) {
+  const bool cur_on = local.onOff == 1;
+  const auto cur_mode = static_cast<FujiMode>(local.acMode);
+  const auto cur_fan = static_cast<FujiFanMode>(local.fanMode);
+  const byte cur_sp = local.temperature;
+  const uint32_t now = millis();
+
+  if (!this->attr_seeded_) {
+    // First real frame after boot: baseline silently, report "Boot" -- never "Human".
+    this->attr_seeded_ = true;
+    this->attr_last_on_ = cur_on;
+    this->attr_last_mode_ = cur_mode;
+    this->attr_last_setpoint_ = cur_sp;
+    this->attr_last_fan_ = cur_fan;
+    if (this->last_change_source_text_sensor_ != nullptr) {
+      this->last_change_source_text_sensor_->publish_state("Boot");
+    }
+    if (this->last_change_detail_text_sensor_ != nullptr) {
+      this->last_change_detail_text_sensor_->publish_state("");
+    }
+    return;
+  }
+
+  if (this->attr_pending_mask_ != 0 && (now - this->requested_at_ms_) > ATTR_ADOPTION_WINDOW_MS) {
+    ESP_LOGD(TAG, "Attribution: adoption window expired with fields still pending (mask=0x%02X)",
+             this->attr_pending_mask_);
+    this->attr_pending_mask_ = 0;
+  }
+
+  bool quiet_all = this->attr_quiet_all_active_ && (now - this->attr_quiet_all_start_ms_) < ATTR_POWER_QUIET_MS;
+  bool quiet_spfan = this->attr_quiet_spfan_active_ && (now - this->attr_quiet_spfan_start_ms_) < ATTR_MODE_QUIET_MS;
+
+  // matches = the changed field now holds the value HA asked for; quiet = side-effect
+  // window in which a non-matching change is re-baselined instead of attributed.
+  auto judge = [this](uint8_t bit, bool matches, const std::string &detail, bool quiet) {
+    const bool pending = (this->attr_pending_mask_ & bit) != 0;
+    if (pending && matches) {
+      this->attr_pending_mask_ &= ~bit;
+      this->emit_change_(false, detail);
+      return;
+    }
+    if (quiet) {
+      ESP_LOGD(TAG, "Attribution: %s inside quiet window -- re-baselined, not attributed", detail.c_str());
+      return;
+    }
+    this->attr_pending_mask_ &= ~bit;
+    this->emit_change_(true, detail);
+  };
+
+  if (cur_on != this->attr_last_on_) {
+    const bool ha = (this->attr_pending_mask_ & ATTR_POWER) && cur_on == this->requested_on_;
+    this->attr_pending_mask_ &= ~ATTR_POWER;
+    this->emit_change_(!ha, std::string("power ") + (this->attr_last_on_ ? "on" : "off") + " -> " + (cur_on ? "on" : "off"));
+    this->attr_quiet_all_active_ = true;
+    this->attr_quiet_all_start_ms_ = now;
+    // Mode/setpoint/fan readings jump across a power transition -- re-baseline all.
+    this->attr_last_on_ = cur_on;
+    this->attr_last_mode_ = cur_mode;
+    this->attr_last_setpoint_ = cur_sp;
+    this->attr_last_fan_ = cur_fan;
+    return;
+  }
+
+  if (!cur_on) {
+    // Unit off: other fields are not meaningful. Track them silently.
+    this->attr_last_mode_ = cur_mode;
+    this->attr_last_setpoint_ = cur_sp;
+    this->attr_last_fan_ = cur_fan;
+    return;
+  }
+
+  if (cur_mode != this->attr_last_mode_) {
+    judge(ATTR_MODE, cur_mode == this->requested_mode_,
+          "mode " + fuji_mode_name(this->attr_last_mode_) + " -> " + fuji_mode_name(cur_mode), quiet_all);
+    // The unit republishes its remembered per-mode setpoint/fan after a mode change.
+    this->attr_quiet_spfan_active_ = true;
+    this->attr_quiet_spfan_start_ms_ = now;
+    quiet_spfan = true;
+  }
+
+  const bool sp_trackable = cur_sp != 0 && this->attr_last_setpoint_ != 0 && cur_mode != FujiMode::FAN &&
+                            this->attr_last_mode_ != FujiMode::FAN;
+  if (cur_sp != this->attr_last_setpoint_ && sp_trackable) {
+    judge(ATTR_SETPOINT, cur_sp == this->requested_setpoint_,
+          "setpoint " + std::to_string(static_cast<int>(this->attr_last_setpoint_)) + " -> " +
+              std::to_string(static_cast<int>(cur_sp)),
+          quiet_all || quiet_spfan);
+  }
+
+  if (cur_fan != this->attr_last_fan_) {
+    judge(ATTR_FAN, cur_fan == this->requested_fan_,
+          "fan " + fuji_fan_name(this->attr_last_fan_) + " -> " + fuji_fan_name(cur_fan), quiet_all || quiet_spfan);
+  }
+
+  this->attr_last_mode_ = cur_mode;
+  this->attr_last_setpoint_ = cur_sp;
+  this->attr_last_fan_ = cur_fan;
 }
 
 void FujitsuClimate::dump_config() {
@@ -629,11 +765,13 @@ void FujitsuClimate::control(const climate::ClimateCall &call) {
     if (climate_mode == climate::CLIMATE_MODE_OFF) {
       this->heat_pump.setOnOff(false);
       this->requested_on_ = false;
+      this->attr_pending_mask_ |= ATTR_POWER;
     } else {
       this->heat_pump.setMode(static_cast<byte>(this->climate_mode_to_fuji_mode_(climate_mode)));
       this->heat_pump.setOnOff(true);
       this->requested_on_ = true;
       this->requested_mode_ = this->climate_mode_to_fuji_mode_(climate_mode);
+      this->attr_pending_mask_ |= ATTR_POWER | ATTR_MODE;
     }
     updated = true;
     sync_updated = true;
@@ -642,6 +780,7 @@ void FujitsuClimate::control(const climate::ClimateCall &call) {
   if (call.get_target_temperature().has_value()) {
     this->heat_pump.setTemp(static_cast<byte>(call.get_target_temperature().value()));
     this->requested_setpoint_ = static_cast<byte>(call.get_target_temperature().value());
+    this->attr_pending_mask_ |= ATTR_SETPOINT;
     updated = true;
     sync_updated = true;
   }
@@ -649,6 +788,7 @@ void FujitsuClimate::control(const climate::ClimateCall &call) {
   if (call.get_fan_mode().has_value()) {
     this->heat_pump.setFanMode(static_cast<byte>(this->climate_fan_to_fuji_fan_(call.get_fan_mode().value())));
     this->requested_fan_ = this->climate_fan_to_fuji_fan_(call.get_fan_mode().value());
+    this->attr_pending_mask_ |= ATTR_FAN;
     updated = true;
     sync_updated = true;
   }

@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.11"
+    version: "4A.12"
   on_boot:
     priority: 600
     then:
@@ -381,6 +381,14 @@ text_sensor:
       name: "Out of Sync Since"
       id: out_of_sync_since
       time_id: homeassistant_time
+    # 4A.12 -- control-authority attribution (control-authority-attribution.md). Who made
+    # the last state change: "HA" | "Human" | "Boot", plus what changed. Not diagnostic.
+    last_change_source:
+      name: "Last Change Source"
+      id: last_change_source
+    last_change_detail:
+      name: "Last Change Detail"
+      id: last_change_detail
 
 # Binary sensors
 binary_sensor:
@@ -411,6 +419,15 @@ binary_sensor:
     defrost_active:
       name: "Defrost Active"
       id: defrost_active
+
+# 4A.12 -- fires once per attributed change (types: human, ha), so repeated human
+# changes each retrigger an HA automation. See control-authority-attribution.md.
+event:
+  - platform: fujitsu_climate
+    fujitsu_climate_id: fujitsu_hp
+    control_change:
+      name: "Control Change"
+      id: control_change
 
 # Switches
 switch:

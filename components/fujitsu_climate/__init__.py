@@ -8,6 +8,7 @@ from esphome.components import climate
 # rx_pin/tx_pin config that replaces the old uart_id reference.
 CODEOWNERS = ["@unreality", "@jamesadapt"]
 DEPENDENCIES = ["climate"]
+AUTO_LOAD = ["event"]
 
 fujitsu_climate_ns = cg.esphome_ns.namespace("fujitsu_climate")
 FujitsuClimate = fujitsu_climate_ns.class_("FujitsuClimate", climate.Climate, cg.Component)

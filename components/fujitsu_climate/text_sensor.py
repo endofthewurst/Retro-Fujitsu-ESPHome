@@ -13,6 +13,8 @@ CONF_RAW_FRAME_OTHER = "raw_frame_other"
 CONF_SYNC_MISMATCH = "sync_mismatch"
 CONF_OUT_OF_SYNC_SINCE = "out_of_sync_since"
 CONF_TIME_ID = "time_id"
+CONF_LAST_CHANGE_SOURCE = "last_change_source"
+CONF_LAST_CHANGE_DETAIL = "last_change_detail"
 
 # Phase 4 rebuild: trimmed down to bus_status only -- corrected_mode/corrected_fan_raw/
 # corrected_economy/mystery_bit/message_dest/message_type/boot_probe/frame_timing were
@@ -56,6 +58,14 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:help-circle-outline",
         ),
+        # 4A.12 -- control-authority attribution. Deliberately NOT entity_category diagnostic:
+        # HA automations consume these directly.
+        cv.Optional(CONF_LAST_CHANGE_SOURCE): text_sensor.text_sensor_schema(
+            icon="mdi:account-question",
+        ),
+        cv.Optional(CONF_LAST_CHANGE_DETAIL): text_sensor.text_sensor_schema(
+            icon="mdi:text-box-outline",
+        ),
         cv.Optional(CONF_SYNC_MISMATCH): text_sensor.text_sensor_schema(
             icon="mdi:sync-alert",
         ),
@@ -88,6 +98,14 @@ async def to_code(config):
     if CONF_SWING in config:
         sens = await text_sensor.new_text_sensor(config[CONF_SWING])
         cg.add(parent.set_swing_text_sensor(sens))
+
+    if CONF_LAST_CHANGE_SOURCE in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_LAST_CHANGE_SOURCE])
+        cg.add(parent.set_last_change_source_text_sensor(sens))
+
+    if CONF_LAST_CHANGE_DETAIL in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_LAST_CHANGE_DETAIL])
+        cg.add(parent.set_last_change_detail_text_sensor(sens))
 
     if CONF_SYNC_MISMATCH in config:
         sens = await text_sensor.new_text_sensor(config[CONF_SYNC_MISMATCH])
