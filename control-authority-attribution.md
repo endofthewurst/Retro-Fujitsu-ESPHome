@@ -1,7 +1,7 @@
 # Control Authority Attribution
 
-**Status:** implemented in firmware 4A.12 (26 Oct 2026), compiled and flashed; live validation pending.
-Supersedes the 15 Oct 2026 design notes (written against 4A.5, before the requested-vs-actual sync existed).
+**Status:** firmware 4A.12a (26 Oct 2026) - attribution implemented via the two text sensors; live validation pending.
+**The `Control Change` event entity described below is NOT in this build:** the build that included it crash-looped the board (reboot every ~60-80 s into safe mode) and was reverted; the same code without the event ran stable. Treat the event row as planned, pending a serial-captured diagnosis.
 
 ## Purpose
 

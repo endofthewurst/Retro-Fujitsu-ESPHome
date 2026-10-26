@@ -537,9 +537,6 @@ void FujitsuClimate::emit_change_(bool human, const std::string &detail) {
   if (this->last_change_detail_text_sensor_ != nullptr) {
     this->last_change_detail_text_sensor_->publish_state(detail);
   }
-  if (this->change_event_ != nullptr) {
-    this->change_event_->trigger(human ? "human" : "ha");
-  }
 }
 
 void FujitsuClimate::update_attribution_(const FujiFrame &local) {

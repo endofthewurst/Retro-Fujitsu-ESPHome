@@ -54,7 +54,6 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/time/real_time_clock.h"
-#include "esphome/components/event/event.h"
 
 #include "FujiHeatPump.h"
 
@@ -128,7 +127,6 @@ class FujitsuClimate : public climate::Climate, public Component {
   // 17 Oct 2026 (4A.10) -- Defrost / Oil Recovery active (see FujitsuClimate.cpp).
   void set_defrost_binary_sensor(binary_sensor::BinarySensor *s) { defrost_binary_sensor_ = s; }
   // 17 Oct 2026 (4A.12) -- control-authority attribution (see control-authority-attribution.md).
-  void set_change_event(event::Event *e) { change_event_ = e; }
   void set_last_change_source_text_sensor(text_sensor::TextSensor *s) { last_change_source_text_sensor_ = s; }
   void set_last_change_detail_text_sensor(text_sensor::TextSensor *s) { last_change_detail_text_sensor_ = s; }
 
@@ -255,7 +253,6 @@ class FujitsuClimate : public climate::Climate, public Component {
   static constexpr uint32_t ATTR_POWER_QUIET_MS = 3000;
   static constexpr uint32_t ATTR_MODE_QUIET_MS = 3000;
 
-  event::Event *change_event_{nullptr};
   text_sensor::TextSensor *last_change_source_text_sensor_{nullptr};
   text_sensor::TextSensor *last_change_detail_text_sensor_{nullptr};
 

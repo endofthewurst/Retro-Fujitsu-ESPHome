@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.12"
+    version: "4A.12a"
   on_boot:
     priority: 600
     then:
@@ -419,15 +419,6 @@ binary_sensor:
     defrost_active:
       name: "Defrost Active"
       id: defrost_active
-
-# 4A.12 -- fires once per attributed change (types: human, ha), so repeated human
-# changes each retrigger an HA automation. See control-authority-attribution.md.
-event:
-  - platform: fujitsu_climate
-    fujitsu_climate_id: fujitsu_hp
-    control_change:
-      name: "Control Change"
-      id: control_change
 
 # Switches
 switch:
