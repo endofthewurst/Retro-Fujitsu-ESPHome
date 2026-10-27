@@ -251,6 +251,15 @@ frame alternated between frames addressed to us (`20 A1 ...`) and to others (`00
 the icon stayed off and the bus stayed healthy, so the setting appears to be owned by the
 wired controller (one trial, heat mode only). Emulating the controller is not recommended.
 
+**Update, 17 Oct 2026 (fw 4A.11):** the one-way result is firm. Writing byte 5 bit 7 in our
+STATUS reply **clears** an icon that is showing; none of the six options tried (nibble `0xA` as
+a x1 and a x5 pulse, held `0x8`, `0x0`, `0x6`, `0x3`) sets it, from either starting icon state.
+The unit never restores the icon itself; only the wired remote's button does. Details:
+`docs/session-5B-defrost-2026-10-17.md`.
+
+**Update, 28 Oct 2026:** the "Thermo Sensor Icon" `binary_sensor` was live-confirmed — HA
+matches the wired display at all times. Two-way control (turning the icon on) is a future task.
+
 ### 4. CTRL B3 = 0x5F vs 0x7E
 
 CTRL[3] is normally 0x5F and becomes 0x7E during a settings update. Observed exactly 4 times,
@@ -258,12 +267,25 @@ all in `3B10_buttons.log` between 13:21:53 and 13:22:04 — during temperature b
 Almost certainly a change-in-progress handshake flag, and likely required on transmitted
 command frames.
 
-### 5. Defrost / oil recovery indicator — OPEN
+### 5. Defrost / oil recovery indicator — bit identified (17 Oct 2026)
 
-The wired display shows an icon during defrost or oil recovery. No bit identified yet.
-Plan: capture frames (now stored split into "to us" and "other") on a cold humid morning,
-diff around the icon, and check whether defrost and oil recovery share a bit (the Stand-by
-hot-start icon is a possible stand-in for testing). Target: a `defrost_active` binary sensor.
+The wired display shows one icon for defrost and oil recovery. **Byte 2 bit 3 (0x08) of the frame
+not addressed to us** (unit -> primary, the "other" frame) tracked the icon for a whole live
+cycle (17 Oct 2026, cold morning, outdoor 6.5 °C, unit heating): set 19:22:22 UTC, cleared
+19:28:53 UTC (6 min 31 s). Exposed as `binary_sensor` "Defrost Active" (fw 4A.10) with a 3 s
+debounce, because byte 2 also blips `08` at power transitions. The outdoor fan restarted roughly
+a minute or more after the bit cleared, so a post-defrost warm-up is not covered by it. Still
+open: a second cycle, and whether oil recovery sets the same bit (they share the icon). See
+`docs/session-5B-defrost-2026-10-17.md`.
+
+### 6. Swing icon — decoded, monitored read-only
+
+The vendored engine decodes swing as byte 5 bit 2 (`getSwingMode()`); it was added as a passive
+sensor in 4A.8 and live-tested on 28 Oct 2026 against the wired remote's swing icon. While the
+unit is running the entity matches the icon. **Quirk:** with the unit off/standby the remote
+hides the icon but the bit still reads set (HA shows On), so the value is only meaningful while
+the unit is running. Not investigated further. Exposed as `text_sensor` "Swing Icon" (On/Off),
+renamed from "Swing (unconfirmed)" in 4A.12b-rc1.
 
 ---
 
@@ -289,8 +311,8 @@ following CTRL frame. Prevents offset drift. Confirmed working: zero sync errors
 
 1. ~~Fan speed capture with raw byte logging~~ — **done.** Resolved 8 Aug 2026, live-confirmed 11 Aug 2026. See the Fan Speed section above.
 2. **Confirm temperature offset for HEAT** — set HEAT to 24C and read B5.
-3. ~~Map thermo sensor icon~~ — **bit found, 3 Oct 2026** (byte 5 bit 7; see Open Question 3). Remaining: control (write test was negative) and what the setting changes.
-3a. **Defrost / oil-recovery active flag** — identify the bit (Open Question 5) and expose `defrost_active`.
+3. ~~Map thermo sensor icon~~ — **done.** Bit found 3 Oct 2026 (byte 5 bit 7), live-confirmed 28 Oct 2026. Remaining: two-way control (the ESP32 can only clear the icon; future task) and what the setting changes.
+3a. ~~Defrost / oil-recovery active flag~~ — **bit found, 17 Oct 2026** (Open Question 5) and exposed as `defrost_active` (fw 4A.10). Remaining: a second cycle, and whether oil recovery sets the same bit.
 4. **Wire decoded state to HA climate entity** — `on_off_`, `mode_`, `fan_mode_` decode
    correctly in parseCTRLFrame(); still need pushing to the ESPHome climate component publish.
 5. **Phase 4: transmit.** The CTRL frame is the wired controller's own frame, so as a

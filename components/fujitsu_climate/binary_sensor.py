@@ -31,8 +31,9 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         # 4 Oct 2026 (4A.9): byte 5 bit 7 of the frame addressed to us. On = the wired
         # controller's Thermo Sensor icon is shown (its own sensor in use).
+        # 28 Oct 2026 (4A.12b-rc1): live-confirmed, so a primary entity (Sensors group), no
+        # longer diagnostic.
         cv.Optional(CONF_THERMO_ICON): binary_sensor.binary_sensor_schema(
-            entity_category="diagnostic",
             icon="mdi:thermometer-auto",
         ),
         # 17 Oct 2026 (4A.10): byte 2 bit 3 of the frame not addressed to us. On = the wired

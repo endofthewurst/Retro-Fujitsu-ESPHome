@@ -7,9 +7,10 @@ Developed and tested against a **~2010-era Fujitsu ART30LUAK (RSG series)** heat
 its LIN bus interface, with the ESP32 joining as a **secondary (slave) controller** alongside
 the existing wired remote (Fujitsu **AR-3TA3 / UTB-TUB** — see correction note below).
 
-**Current status:** decoding the bus is working and solid (power, mode, and target
-temperature are read correctly into Home Assistant). Sending commands back to the unit is
-**experimental and unvalidated** — see [Protocol](#protocol) and
+**Current status — release candidate 4A.12b-rc1 (28 Oct 2026):** decoding the bus is working
+and solid, and control from Home Assistant (power, mode, target temperature, fan speed, Economy)
+has been confirmed live against the real unit, gated behind the "Aircon Control Enabled" switch.
+The transmit path is younger than decode — see [Protocol](#protocol) and
 [Project History & Phases](#project-history--phases) below before relying on it.
 
 ---
@@ -102,6 +103,18 @@ The ESP32 is a **secondary (slave) controller**, and live control is **on by def
   `state-of-play.md`'s "4A" sessions for the live-confirmation history of each field.
 - **Diagnostic sensors** — IP address, WiFi signal strength, uptime, free heap, bus
   status/alive, status LED pattern.
+- **Thermo Sensor Icon** — read-only binary sensor for the wired controller's "own sensor in
+  use" icon (byte 5 bit 7 of the frame addressed to us). Live-confirmed 28 Oct 2026: HA matches
+  the wired display at all times. Two-way control is a future task.
+- **Swing Icon** — read-only On/Off for the swing icon (byte 5 bit 2). Matches the wired
+  remote's icon while the unit is running; with the unit off/standby the remote hides the icon
+  but the entity still reads On (known quirk, tested 28 Oct 2026).
+- **Defrost Active** — binary sensor from byte 2 bit 3 of the frame not addressed to us
+  (fw 4A.10); identified on one live defrost cycle, a second is still to do.
+- **Sync and attribution** — In Sync / Sync Mismatch / Out of Sync Since (requested vs actual
+  state) and Last Change Source / Detail (who changed what: HA, Human or Boot).
+- **Tidy Home Assistant page** — entities grouped as Controls / Sensors / Diagnostic with
+  nothing in "Configuration" (see [Home Assistant](#home-assistant)).
 - **Status LED** — Visual feedback on the ESP32 board (GPIO2); read-only diagnostic, not
   a controllable entity.
 - **Web interface** — ESPHome's built-in web server for local access.
@@ -109,13 +122,10 @@ The ESP32 is a **secondary (slave) controller**, and live control is **on by def
   wired controller keeps working normally, with no modification to the heat pump or the controller.
 
 ### Experimental / in progress
-- **Swing** — decoded upstream in principle (see `PROTOCOL.md`) but not live-tested on
-  this unit.
-- **The wired controller's "Thermo Sensor" setting** — the icon bit is now identified
-  (byte 5 bit 7 of the frame addressed to us) and monitored read-only via the "Thermo
-  Sensor Icon" binary sensor. Setting it from the ESP32 was tried and had no effect; see
-  `PROTOCOL.md`'s Open Question 3 and the Roadmap below.
-- **Defrost / oil recovery detection** — not yet decoded; see the Roadmap below.
+- **Two-way control of the Thermo Sensor icon** — future task. The ESP32 can only clear the
+  icon, never set it (`docs/session-5B-defrost-2026-10-17.md`; `PROTOCOL.md` Open Question 3).
+- **Defrost / oil recovery detection** — Defrost Active exists but rests on one live cycle;
+  whether Oil Recovery sets the same bit is untested. See the Roadmap below.
 - **OTA updates** — works, with one caveat: native ESPHome OTA fails if `logger: level:
   VERBOSE` is set (use the curl route below instead in that case).
 
@@ -135,7 +145,11 @@ The ESP32 is a **secondary (slave) controller**, and live control is **on by def
 | Current Temperature | Room temperature (wired controller's own thermistor) | Working — see Protocol |
 | Fan Speed | Auto/Quiet/Low/Medium/High | Working (Quiet inferred, not independently tested) |
 | Economy | On/Off | Working, decoded and controllable |
-| Thermo Sensor Icon | Wired controller is using its own sensor (diagnostic) | Working (fw 4A.9), read-only |
+| Thermo Sensor Icon | Wired controller is using its own sensor | Working, live-confirmed 28 Oct 2026; read-only (two-way control is a future task) |
+| Swing Icon | Wired remote's swing icon (On/Off) | Working while the unit is running; reads On when off/standby (known quirk) |
+| Defrost Active | Defrost / oil-recovery icon | Working (fw 4A.10), from one live cycle |
+| In Sync / Sync Mismatch / Out of Sync Since | Requested vs actual unit state | Working |
+| Last Change Source / Detail | Who last changed the state (HA / Human / Boot) and what changed | Working (fw 4A.12a) |
 | Raw Frame To Us / Other | Last raw frame addressed to us / to others (diagnostic) | Working (fw 4A.9) |
 | WiFi Signal | RSSI in dBm | Working |
 | IP Address | Device IP on local network | Working |
@@ -404,6 +418,22 @@ type: thermostat
 entity: climate.aircon_fujitsu_heat_pump
 ```
 
+### Device page layout
+
+The **Aircon** device page is grouped as **Controls / Sensors / Diagnostic**. Home Assistant
+builds these groups from each entity's `entity_category` (custom groups are not possible), and
+the firmware never uses `config`, so there is no "Configuration" group.
+
+| Group | Entities |
+|---|---|
+| Controls | Fujitsu Heat Pump (climate), Fan Speed, Economy Mode, Aircon Control Enabled |
+| Sensors | Room Temp, Thermo Sensor Icon, Swing Icon, Defrost Active, In Sync, Sync Mismatch, Out of Sync Since, Last Change Source, Last Change Detail |
+| Diagnostic | Bus Alive, Bus Status, Raw Frame To Us / Other, Setpoint, Set Temperature, Thermo Sensor Experiment, Thermo Sensor Write Test, Restart, Safe Mode Boot, Status, Status LED Pattern, ESPHome Version, GitHub Repository, Uptime, Free Heap Memory, WiFi Signal / SSID, IP / MAC Address |
+
+The local ESPHome web page stays a flat list: ESPHome's `sorting_groups` need `web_server`
+version 3, and this project uses version 2 (the v3 UI only rendered entities that republished
+after the page loaded).
+
 ---
 
 ## Troubleshooting
@@ -481,37 +511,49 @@ the bus, given transmit is still experimental.
 - **Oct 2026** — Installed in the house, bus-powered. Found the Thermo Sensor icon bit
   (byte 5 bit 7 of frames addressed to us); firmware 4A.9 adds read-only monitoring and
   split raw-frame diagnostics. A write test had no effect. RoomMind configuration reviewed.
+- **17 Oct 2026** — Firmware 4A.10: Defrost Active binary sensor (byte 2 bit 3 of the frame not
+  addressed to us, found on a live cold-morning cycle); the noisy "unconfirmed" text sensors
+  retired. 4A.11: Thermo Sensor Experiment select — writing the icon bit can only clear the
+  icon, never set it.
+- **Late Oct 2026** — Firmware 4A.12 / 4A.12a: control-authority attribution (Last Change
+  Source / Detail). 4A.12 also added an event entity that crash-looped the installed board;
+  4A.12a dropped it and uses text sensors only.
+- **27–28 Oct 2026** — Home Assistant device page regrouped as Controls / Sensors /
+  Diagnostic (nothing left in "Configuration"). Thermo Sensor Icon live-confirmed; the Swing
+  sensor was tested against the wired remote, renamed "Swing Icon" and moved to Sensors.
+  Release candidate **4A.12b-rc1**.
 
 The transmit path is live and has been exercised successfully for several fields (see
 Climate Controls above), but hasn't been through the same volume of testing as decode —
-treat it as working-but-young rather than as mature as decode. The wired controller's
-Thermo Sensor icon is now decoded and monitored read-only (writing it has been tried and does
-not work); Defrost detection is still open. See the Roadmap below.
+treat it as working-but-young rather than as mature as decode. The wired controller's Thermo
+Sensor icon is decoded and monitored read-only (live-confirmed 28 Oct 2026; the ESP32 can clear
+it but not set it); Defrost Active exists but rests on one live cycle. See the Roadmap below.
 
 ---
 
 ## Roadmap / To do
 
-Full detail: `docs/session-5A-checkin-2026-10-03.md`.
+Full detail: `docs/session-5A-checkin-2026-10-03.md`, `docs/session-5B-defrost-2026-10-17.md`, `docs/session-5C-entity-layout-2026-10-28.md`.
 
-### A. Thermo Sensor icon — monitoring done, control open
-- [x] **A1. Monitor.** The icon is byte 5 bit 7 (0x80) of the frame addressed to us (`84` = shown, `04` = off); exposed as `binary_sensor` "Thermo Sensor Icon" (fw 4A.9), validated by one passive test, 3 Oct 2026.
-- [ ] **A2.** Second confirmation cycle (the icon was toggled twice in one test only).
-- [ ] **A3.** Retire the noisy `thermo_sensor_unconfirmed` / `unknown_bit_unconfirmed` / `raw_frame_unconfirmed` diagnostics.
+### A. Thermo Sensor icon — monitoring confirmed, two-way control is a future task
+- [x] **A1. Monitor.** The icon is byte 5 bit 7 (0x80) of the frame addressed to us (`84` = shown, `04` = off); exposed as `binary_sensor` "Thermo Sensor Icon" (fw 4A.9). **Live-confirmed 28 Oct 2026:** HA matches the wired display at all times.
+- [x] **A2.** Second confirmation — covered by the 28 Oct 2026 test.
+- [x] **A3.** Retire the noisy `thermo_sensor_unconfirmed` / `unknown_bit_unconfirmed` / `raw_frame_unconfirmed` diagnostics — done in 4A.10.
 - [ ] **A4.** Establish what the icon actually changes (the 21.0 vs 19.7 °C room-temperature gap is *not* explained by it).
-- [ ] **A5. Control.** Write test (ORing 0x08 into `updateMagic` in STATUS replies) had **no effect**: icon stayed off, bus healthy. Repeat in other modes/conditions, look for other fields in full-frame captures, or accept read-only with an HA-side advisory. Emulating the wired controller's frame is **not** recommended (ESP32 is never the boss).
-- [ ] **A6.** Keep or remove the "Thermo Sensor Write Test" switch.
+- [ ] **A5. Two-way control (future task).** From the ESP32 the icon can only be *cleared* (ORing 0x8 into the `updateMagic` nibble of a STATUS reply; one-shot). Six variants tried in 4A.11 never set it. Turning it on needs another field or message type, probably reachable only by emulating the wired controller, which is **not** recommended (ESP32 is never the boss). Alternative: accept off-only plus an HA-side advisory.
+- [ ] **A6.** Keep or remove the "Thermo Sensor Write Test" switch; the "Thermo Sensor Experiment" select is no longer needed.
 
-### B. Defrost / oil-recovery active flag — open
-- [ ] **B1.** Arm a capture watch for a cold, humid morning; export frames inside the ~10-day HA recorder retention (use `Raw Frame To Us` / `Raw Frame Other`).
-- [ ] **B2.** Identify the bit by diffing frames around the wired display's defrost icon; use the Stand-by hot-start icon as a stand-in; check whether defrost and oil recovery share a bit.
-- [ ] **B3.** Expose `defrost_active` as a `binary_sensor`. ESPHome 2025.4.2 climate actions may lack DEFROSTING, so `hvac_action: defrosting` may need a template/HA-side wrapper (unverified).
-- [ ] **B4.** Live validation against the physical icon.
-- [ ] **B5.** Use the flag in RoomMind (avoid treating defrost as short-cycling or a failed heat call).
+### B. Defrost / oil-recovery active flag — shipped, validation open
+- [x] **B1–B3.** Bit identified (byte 2 bit 3 of the frame not addressed to us) and exposed as `binary_sensor` "Defrost Active" (fw 4A.10, 3 s debounce), from one live cycle on 17 Oct 2026. A `hvac_action: defrosting` mapping is not done.
+- [ ] **B4.** Validate on a second cold cycle; check whether Oil Recovery also sets the bit.
+- [ ] **B5.** Use the flag in RoomMind (exclude defrost plus a ~2 min hold-off from learning and control).
 
 ### C. Other
 - API/WiFi link drops (five brief `unavailable` events in two days) not yet root-caused.
 - RoomMind short-cycling (4–8 minute runs observed 1–2 Oct); five rooms share the single climate entity.
+- Swing Icon reads On while the unit is off/standby (the wired remote hides the icon then); cause not investigated.
+- Possible tidy-ups: move Sync Mismatch / Out of Sync Since to Diagnostic; make Restart a button instead of a switch.
+- The local web page cannot follow the HA Controls / Sensors / Diagnostic grouping while on `web_server` version 2.
 
 ---
 

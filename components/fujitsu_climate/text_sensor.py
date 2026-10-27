@@ -54,9 +54,10 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category="diagnostic",
             icon="mdi:code-braces",
         ),
+        # 28 Oct 2026 (4A.12b-rc1): live-tested against the wired remote's swing icon, so no
+        # longer "unconfirmed"/diagnostic -- a primary entity (Sensors group).
         cv.Optional(CONF_SWING): text_sensor.text_sensor_schema(
-            entity_category="diagnostic",
-            icon="mdi:help-circle-outline",
+            icon="mdi:swap-vertical",
         ),
         # 4A.12 -- control-authority attribution. Deliberately NOT entity_category diagnostic:
         # HA automations consume these directly.

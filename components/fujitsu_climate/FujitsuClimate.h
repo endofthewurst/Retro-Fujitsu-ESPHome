@@ -103,10 +103,9 @@ class FujitsuClimate : public climate::Climate, public Component {
   void set_bus_status_text_sensor(text_sensor::TextSensor *s) { bus_status_text_sensor_ = s; }
   void set_corrected_setpoint_sensor(sensor::Sensor *s) { corrected_setpoint_sensor_ = s; }
   void set_corrected_room_temp_sensor(sensor::Sensor *s) { corrected_room_temp_sensor_ = s; }
-  // 10 Sep 2026 -- Swing diagnostic. Decoded upstream (byte 5 bit 2,
-  // FujiHeatPump::getSwingMode()) but never live-tested against a real button press
-  // before now -- see hardware-and-protocol.md's field table and state-of-play.md's
-  // "What is decoded" table ("Swing: Not yet tested live"). Passive/unconfirmed.
+  // 10 Sep 2026 -- Swing Icon. Decoded upstream (byte 5 bit 2, FujiHeatPump::getSwingMode()).
+  // Live-tested 28 Oct 2026 against the wired remote's swing icon: matches while the unit is
+  // running; while off/standby the remote hides the icon but this still reads On. Read-only.
   void set_swing_text_sensor(text_sensor::TextSensor *s) { swing_text_sensor_ = s; }
 
   // 2 Sep 2026 -- requested-vs-actual state sync. See the file-header comment above.

@@ -32,7 +32,7 @@ esphome:
   friendly_name: "Aircon"
   project:
     name: "james.retro-fujitsu"
-    version: "4A.12a"
+    version: "4A.12b-rc1"
   on_boot:
     priority: 600
     then:
@@ -212,6 +212,7 @@ sensor:
       id: corrected_setpoint
     corrected_room_temp:
       name: "Room Temp"
+      entity_category: ""
       id: corrected_room_temp
 
 # Settable setpoint, independent of the climate entity's own target_temperature.
@@ -233,7 +234,7 @@ number:
     name: "Set Temperature"
     id: fujitsu_set_temperature
     icon: "mdi:thermometer"
-    entity_category: config
+    entity_category: diagnostic
     min_value: 16
     max_value: 30
     step: 1
@@ -259,7 +260,6 @@ select:
     name: "Fan Speed"
     id: fujitsu_fan_speed
     icon: "mdi:fan"
-    entity_category: config
     update_interval: 5s
     options:
       - "Auto"
@@ -296,7 +296,7 @@ select:
     name: "Thermo Sensor Experiment"
     id: thermo_experiment
     icon: "mdi:flask-outline"
-    entity_category: config
+    entity_category: diagnostic
     optimistic: true
     restore_value: false
     initial_option: "Off"
@@ -354,14 +354,18 @@ text_sensor:
 
   # Trimmed to bus_status in Phase 4 -- see components/fujitsu_climate/text_sensor.py.
   # 17 Oct 2026 (4A.10): the thermo_sensor / unknown_bit / raw_frame "unconfirmed" sensors
-  # were retired (refuted/noisy). Swing (unconfirmed) kept.
+  # were retired (refuted/noisy). Swing was kept and is now "Swing Icon" (see below).
   - platform: fujitsu_climate
     fujitsu_climate_id: fujitsu_hp
     bus_status:
       name: "Bus Status"
       id: bus_status
+    # 28 Oct 2026 (4A.12b-rc1) -- renamed from "Swing (unconfirmed)" after a live test against
+    # the wired remote's swing icon: HA matches the icon while the unit is running. Known
+    # quirk: with the unit off/standby the remote hides the icon but this still reads On.
+    # Now a primary entity (Sensors group). See docs/session-5C-entity-layout-2026-10-28.md.
     swing:
-      name: "Swing (unconfirmed)"
+      name: "Swing Icon"
       id: swing
     # 4 Oct 2026 (4A.9) -- the two raw frame types, kept separate (see FujiHeatPump.h).
     raw_frame_to_us:
@@ -411,6 +415,8 @@ binary_sensor:
       id: aircon_in_sync
     # 4 Oct 2026 (4A.9) -- Thermo Sensor icon, found by a passive button test on 3 Oct
     # (byte 5 bit 7 of the frame addressed to us). On = icon shown on the wired controller.
+    # 28 Oct 2026 (4A.12b-rc1): live-confirmed -- HA matches the wired display at all times.
+    # Now a primary entity (Sensors group). Read-only; two-way control is a future task.
     thermo_icon:
       name: "Thermo Sensor Icon"
       id: thermo_icon
@@ -424,6 +430,7 @@ binary_sensor:
 switch:
   - platform: restart
     name: "Restart"
+    entity_category: diagnostic
 
   # Kill switch for live control (added Phase 4) -- hardware-and-protocol.md's "ESP32
   # is never the boss" design principle. climate.control() ignores every HA command
@@ -436,7 +443,6 @@ switch:
     name: "Aircon Control Enabled"
     id: aircon_control_enabled
     icon: "mdi:lock-open-alert-outline"
-    entity_category: config
     optimistic: true
     restore_mode: ALWAYS_ON
     turn_on_action:
@@ -450,7 +456,7 @@ switch:
     name: "Thermo Sensor Write Test"
     id: thermo_write_test
     icon: "mdi:flask-outline"
-    entity_category: config
+    entity_category: diagnostic
     optimistic: true
     restore_mode: ALWAYS_OFF
     turn_on_action:
@@ -468,7 +474,6 @@ switch:
     name: "Economy Mode"
     id: fujitsu_economy_mode
     icon: "mdi:leaf"
-    entity_category: config
     lambda: |-
       return id(fujitsu_hp).preset == climate::CLIMATE_PRESET_ECO;
     turn_on_action:

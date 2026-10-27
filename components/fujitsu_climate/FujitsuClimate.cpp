@@ -185,10 +185,10 @@ void FujitsuClimate::update_bus_status_() {
     }
   }
 
-  // 10 Sep 2026 -- Swing diagnostic (FujiHeatPump::getSwingMode(), byte 5 bit 2).
-  // Decoded upstream but never live-tested before now -- see hardware-and-protocol.md
-  // and state-of-play.md's "What is decoded" table. Same passive/unconfirmed
-  // treatment and 250ms throttle as thermo_sensor/unknown_bit above.
+  // 10 Sep 2026 -- Swing Icon (FujiHeatPump::getSwingMode(), byte 5 bit 2). Added as a
+  // passive "(unconfirmed)" diagnostic; live-tested 28 Oct 2026 against the wired remote's
+  // swing icon (matches while the unit is running; while off/standby the remote hides the
+  // icon but this still reads On). Published as plain On/Off. 250ms throttle as elsewhere.
   if (this->hardware_present_ && this->swing_text_sensor_ != nullptr) {
     int bit = this->heat_pump.getSwingMode();
     uint32_t now = millis();
@@ -198,7 +198,7 @@ void FujitsuClimate::update_bus_status_() {
       this->swing_initialized_ = true;
       this->last_swing_bit_ = bit;
       this->last_swing_publish_ms_ = now;
-      this->swing_text_sensor_->publish_state(bit ? "On (unconfirmed)" : "Off (unconfirmed)");
+      this->swing_text_sensor_->publish_state(bit ? "On" : "Off");
     }
   }
 
