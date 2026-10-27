@@ -71,7 +71,13 @@ off). This is a note, not a fix; the cause has not been investigated.
   known in this repo; check RoomMind/automations.
 
 **Build status:** compiles cleanly (ESPHome 2025.4.2, `esphome config` and `esphome compile`
-both pass). On-board verification of the rename and regrouping is pending the flash of this build.
+both pass). Flashed by OTA on 28 Oct 2026 (build stamp 08:21 NZDT). Checked over the device's
+REST API: clean boot; Bus Alive on, Bus OK, In Sync on; `swing_icon` live (`On`) and the old
+`swing_unconfirmed` endpoint gone (404); Thermo Sensor Icon on; Defrost Active off; control switch,
+fan, economy and set-temperature entities present and reading; 3-minute soak with no reboot
+(uptime monotonic, free heap steady around 180 kB). Not yet checked: the Controls / Sensors /
+Diagnostic placement of the two moved icons on the HA page, and no control commands were sent
+(the TX path is unchanged in this release).
 
 ## 4. Considered, not adopted
 
