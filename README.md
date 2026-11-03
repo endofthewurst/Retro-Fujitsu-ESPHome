@@ -334,9 +334,15 @@ sync markers, etc. are still accurate).
 ## Software Setup
 
 ### Prerequisites
-- [ESPHome](https://esphome.io/) installed on Windows (via pip)
+- [ESPHome](https://esphome.io/) **2025.4.2**, installed on Windows via pip: `pip install esphome==2025.4.2`
 - [Git](https://git-scm.com/download/win) installed
 - Home Assistant with the ESPHome integration
+
+> **Newer ESPHome versions are not supported yet.** This project is built and tested on
+> ESPHome 2025.4.2. On ESPHome 2026.x the component fails to load (see issue #3). The
+> loading and compile errors can be fixed, but on real hardware the heat pump did not
+> accept control commands from the 2026.x build (reading the bus still worked), so
+> there is no 2026.x release yet. Please pin 2025.4.2 until that's resolved.
 
 ### Installation
 
