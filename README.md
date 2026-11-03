@@ -3,7 +3,8 @@
 **Local Home Assistant control for Fujitsu heat pumps that only have a wired wall controller.**
 An ESP32 and a small LIN module join the controller's 3-wire bus, so Home Assistant gets a normal
 climate entity (mode, target temperature, fan speed) while the wall controller keeps working
-exactly as before. No cloud, no mains wiring, nothing inside the heat pump modified.
+exactly as before. No cloud, no mains wiring, and nothing inside the heat pump modified. The only change to
+existing equipment is one DIP switch inside the wired controller.
 
 > **Status: release candidate 4A.13-rc1.** Developed and tested on one unit (details in
 > [Will it work with my unit?](#will-it-work-with-my-unit)). It has run on the author's heat pump
@@ -56,8 +57,8 @@ ESP32 did not exist.
   makes the ESP32 read-only.
 - **It tells people and automations apart.** Knowing whether a person or Home Assistant made the last
   change is the first step towards automations that do not fight the humans in the house.
-- **Low risk to install.** Three low-voltage wires, no mains work, and it is reversible: unplug it and the
-  system is exactly as it was.
+- **Low risk to install.** Three low-voltage wires, one DIP switch and no mains work. It is reversible:
+  unplug the ESP32 and flip the DIP switch back, and the system is as it was.
 - **It is a good project to learn from.** The bus protocol is documented and the raw captures are in
   the repository if you want to extend it to other models.
 
@@ -123,8 +124,8 @@ Also needed: small screwdrivers, wire strippers, and a computer to flash the ESP
 
 **Essential**
 
-- **Basic electrical safety.** You will turn the heat pump off at the breaker and work on low-voltage
-  wiring. If the indoor unit is in a ceiling or roof space, take access and footing seriously.
+- **Basic electrical safety.** You will turn the heat pump off at the breaker, open the wired controller
+  to set a DIP switch, and work on low-voltage wiring. If the indoor unit is in a ceiling or roof space, take access and footing seriously.
 - **Using a multimeter** to check DC voltage and find which wire is which.
 - **Following a wiring diagram** carefully, including checking that all the grounds are common.
 - **Running a few commands** and editing a text file (your Wi-Fi name and password).
@@ -156,6 +157,39 @@ The wired controller and the indoor unit talk over a single-wire LIN bus. The ES
 **secondary (slave) controller**: it listens to every frame, publishes the state to Home Assistant, and
 when you change something, it sends that change as the reply to the next frame the unit addresses to it.
 The wired controller stays on the bus the whole time.
+
+---
+
+## Set the wired controller to Dual mode
+
+The ESP32 acts as a second ("slave") controller, so the wired controller has to be told to expect one.
+On the tested unit this is the **"Dual remote controller" DIP switch** inside the wired controller. These
+settings come from the Fujitsu ART30LUAK technical manual (section 5-16-6, wired simple remote controller):
+
+| Mode | SW1 | SW2 |
+|------|-----|-----|
+| Normal (factory setting) | ON | OFF |
+| **Dual, master controller (use this)** | **OFF** | OFF |
+
+Leave SW3 to SW6 as they are.
+
+1. Turn the heat pump off at the breaker.
+2. Open the wired controller's front case (two screws). Unplug the connector that joins the front case
+   to the circuit board before you let the case hang, otherwise the wires can break.
+3. Flip **SW1 only** to OFF. Do not touch the other switches.
+4. Put the case back together and switch the power on.
+
+**Notes**
+
+- It is reversible. To undo it, flip SW1 back to ON.
+- This was discovered while developing the project, and other projects do not document it. On the tested
+  unit the wired controller behaved normally in Dual mode, with no error. Whether control also works in
+  Normal mode with the current firmware has not been tested, so treat the switch as required.
+- **Check your own controller's manual.** Other Fujitsu wired controllers describe a different switch
+  arrangement. For example, the generic installation manual for the UTY-RNNUM uses a different switch for
+  dual control and marks SW1 as "do not change". Do not change any switch your manual says not to touch.
+- How to tell it is set: on the tested unit, the second byte of *Raw Frame To Us* in Home Assistant reads
+  **A1** in Dual mode. The development notes record it reading 80 in Normal mode.
 
 ---
 
@@ -242,7 +276,8 @@ The wired controller stays on the bus the whole time.
    ```
 5. **Add it to Home Assistant:** *Settings, Devices & Services, ESPHome.* The device **Aircon** should
    appear automatically. Click **Configure** and add it.
-6. **Wire it up** (see above) and power it from the heat pump's 12 V.
+6. **Set the DIP switch and wire it up** (see above): put the wired controller in Dual mode, then connect
+   the ESP32 and power it from the heat pump's 12 V.
 7. **Check it is working:**
    - *Bus Alive* is on and *Bus Status* reads **Bus OK**.
    - The room temperature matches the wired controller's display.
@@ -312,6 +347,9 @@ add `- "Quiet"` to the Fan Speed select.
 - Check the LIN module has power, and that all grounds are common.
 - Swap the two data wires: the module's TX should go to the ESP32's GPIO16 (see the notes in Wiring).
 - Make sure you are using a LIN module, not a CAN module.
+
+**The values read correctly but changes from Home Assistant do nothing**
+- Check the wired controller's DIP switch is set to Dual mode (see above), then try a fan speed change.
 
 **The ESP32 keeps rebooting after flashing**
 - If you are bench-testing without the bus connected, check the GPIO16 pull-up is on (the firmware does
