@@ -1,623 +1,378 @@
 # Retro-Fujitsu-ESPHome
 
-Monitor, and eventually control, a **Fujitsu heat pump** from **Home Assistant** using an
-ESP32 and ESPHome — without modifying or replacing the existing wired controller.
+**Local Home Assistant control for Fujitsu heat pumps that only have a wired wall controller.**
+An ESP32 and a small LIN module join the controller's 3-wire bus, so Home Assistant gets a normal
+climate entity (mode, target temperature, fan speed) while the wall controller keeps working
+exactly as before. No cloud, no mains wiring, nothing inside the heat pump modified.
 
-Developed and tested against a **~2010-era Fujitsu ART30LUAK (RSG series)** heat pump using
-its LIN bus interface, with the ESP32 joining as a **secondary (slave) controller** alongside
-the existing wired remote (Fujitsu **AR-3TA3 / UTB-TUB** — see correction note below).
+> **Status: release candidate 4A.13-rc1.** Developed and tested on one unit (details in
+> [Will it work with my unit?](#will-it-work-with-my-unit)). It has run on the author's heat pump
+> since October 2026. Compatibility reports from other units are very welcome.
 
-**Current status — release candidate 4A.13-rc1 (3 Nov 2026):** decoding the bus is working
-and solid, and control from Home Assistant (power, mode, target temperature, fan speed, Economy)
-has been confirmed live against the real unit, gated behind the "Aircon Control Enabled" switch.
-The transmit path is younger than decode — see [Protocol](#protocol) and
-[Project History & Phases](#project-history--phases) below before relying on it.
-
----
-
-## Correction, 1 September 2026 — actual wired controller model, and the UTD-RS100 option
-
-This repo's docs (and its earlier design notes) assumed the wired controller fitted to this
-ART30LUAK was a Fujitsu **UTY-RNNUM**. That was wrong. The actual unit is a Fujitsu
-**AR-3TA3 / UTB-TUB** simple wired remote controller (the exact model suffix is hard to pin
-down and varies by region/distributor) — corroborated by the ART30/36LUAK technical manual's
-spec table, which lists the remote controller type as "WIRED (AR-3TA*)". All the live
-bus-decode and bus-capture work in this repo is unaffected by this correction, since it was
-derived from real captures against the actual hardware, not from the UTY-RNNUM manual's
-description — but any reasoning that leaned on the UTY-RNNUM manual's specific button/DIP-switch
-layout (rather than the captured bus behaviour) should be treated with caution.
-
-Separately: the ART30/36LUAK has an optional **Fujitsu UTD-RS100** remote temperature sensor.
-If fitted, it physically replaces the connection to the indoor unit's own built-in thermistor
-at connector **CN8** on the indoor unit's PCB — it does not sit alongside it. Whether a
-UTD-RS100 is actually fitted on this specific installation has **not been physically
-confirmed** (checking connector CN8 on the indoor unit would confirm it either way).
-
-This matters for the wired controller's **Thermo Sensor** setting (see
-[Open Question 3 in PROTOCOL.md](PROTOCOL.md)): that setting selects which room-temperature
-source the system uses — the wired controller's own thermistor, or a remote source (the
-indoor unit's own thermistor, or the UTD-RS100 if fitted at CN8 in its place). On the wired
-controller's LCD, an icon resembling the wired controller itself is shown when its own
-thermistor is in use, and is not shown when a remote source is in use. This wasn't understood
-during this repo's earlier Thermo Sensor button testing (see the project history), so any
-future retest of that setting should watch the physical icon directly, and confirm whether a
-UTD-RS100 is fitted at CN8, rather than inferring the sensor source from bus behaviour alone.
+<p align="center">
+  <img src="docs/images/installed-board.jpg" alt="The ESP32 on a screw-terminal breakout board, installed" width="320">
+  &nbsp;&nbsp;
+  <img src="docs/images/climate-card.png" alt="The heat pump's climate card in Home Assistant" width="320">
+</p>
 
 ---
 
-## Design principle: the ESP32 is never the boss
+## What it does
 
-The wired controller (Fujitsu **AR-3TA3 / UTB-TUB** — see correction note below) is the
-**primary controller** and must always remain fully capable of
-running the system on its own — regardless of whether the ESP32 is powered, on WiFi, able
-to reach Home Assistant, or running firmware without bugs. A person must always be able to
-walk up to the wired controller and operate the heat pump exactly as if the ESP32 didn't
-exist. If the ESP32 and the wired controller ever disagree, the wired controller's setting
-is the one that should win. This governs every design decision in the transmit (control)
-path.
+- **Control from Home Assistant:** power, mode (Auto, Cool, Heat, Dry, Fan only), target temperature,
+  fan speed (Auto, Low, Medium, High) and Economy.
+- **Changes from either side:** a change made at the wired controller shows up in Home Assistant, and a
+  change made in Home Assistant shows up on the wired controller.
+- **Room temperature as a sensor:** the reading from the wired controller's own thermistor.
+- **Defrost detection:** a binary sensor that turns on during a defrost cycle.
+- **Who changed it:** *Last Change Source* says whether the last change came from Home Assistant, a
+  person at the wall, or a reboot, and *In Sync* shows whether Home Assistant and the unit agree.
+- **Kill switch:** an *Aircon Control Enabled* switch drops the ESP32 back to read-only at any time.
+- **Local only:** everything runs on your network. ESPHome's web page and over-the-air updates work too.
 
-The ESP32 is a **secondary (slave) controller**, and live control is **on by default**. "Never the boss" means the wired controller always wins a disagreement, not that control is disabled. The "Aircon Control Enabled" switch is an override that can drop the ESP32 back to read-only at any time.
+### The design rule: the ESP32 is never the boss
 
----
-
-## Hardware
-
-### Heat Pump Units (Tested)
-| Component | Model |
-|-----------|-------|
-| Indoor Unit | Fujitsu **ART30LUAK** |
-| Outdoor Unit | Fujitsu **AOT30LMBDL** |
-| Wired Controller | Fujitsu **AR-3TA3 / UTB-TUB** (see correction note below) |
-| Optional remote sensor | Fujitsu **UTD-RS100** (not confirmed fitted on this installation — see correction note below) |
-
-### Electronics Required
-| Component | Notes |
-|-----------|-------|
-| **ESP32-WROOM-32** | Any ESP32 dev board should work |
-| **linttl3 LIN Module** | TJA1021/SIT1021T chip, handles 12V/24V LIN bus to 3.3V TTL conversion |
+The wired controller is the primary controller and always keeps full control of the heat pump,
+whether or not the ESP32 is powered, on Wi-Fi, or running correct firmware. If the two ever disagree,
+the wired controller wins. A person can always walk up to the wall and use the heat pump as if the
+ESP32 did not exist.
 
 ---
 
-## Features
+## Why would you want this?
 
-> **Note, 2 September 2026:** this section badly lagged the project's actual progress —
-> it still described the original ~29 April bring-up. Fan speed, current (room)
-> temperature, and the HEAT/AUTO target-temperature gap were all resolved back in August
-> (see `PROTOCOL.md`'s revision notes), and control from Home Assistant has since been
-> adopted from a vendored upstream engine and confirmed working live for several fields.
-> Updated below to match; see the project's own `hardware-and-protocol.md` and
-> `state-of-play.md` for the full, current picture.
+- **Wired-remote units usually have no Wi-Fi.** Commercial interfaces for this kind of unit can cost a
+  lot more than the parts here, and some depend on a vendor's cloud servers.
+- **It stays local and private.** No account, no subscription, and it keeps working when the
+  internet is down.
+- **You get the real room temperature.** The wired controller's thermistor reading is the temperature
+  the unit actually regulates to. As a Home Assistant sensor it makes room-by-room control (it works
+  well with RoomMind) and your own automations much more accurate.
+- **You can see why it blew cold.** *Defrost Active* explains the cold air at the start of a heating
+  cycle, so you stop wondering whether something is broken.
+- **Better automations than a wall timer.** Pre-heat before you get home, turn off when a window is
+  opened or everyone leaves, shift usage to your solar surplus, or follow your own schedules.
+- **It is family-safe.** Nobody gets locked out: the wall controller always works, and the kill switch
+  makes the ESP32 read-only.
+- **It tells people and automations apart.** Knowing whether a person or Home Assistant made the last
+  change is the first step towards automations that do not fight the humans in the house.
+- **Low risk to install.** Three low-voltage wires, no mains work, and it is reversible: unplug it and the
+  system is exactly as it was.
+- **It is a good project to learn from.** The bus protocol is documented and the raw captures are in
+  the repository if you want to extend it to other models.
 
-### Confirmed and working
-- **State decode** — Power, Mode, Target Temperature (all modes, including HEAT/AUTO),
-  **Fan Speed**, current (room) temperature, and Economy mode all read correctly off the
-  bus and published to Home Assistant as a climate entity (plus dedicated diagnostic
-  sensors/entities for several of them).
-- **Fan Speed** — decoded and live-confirmed: Auto=0, Low=2, Medium=3, High=4 (Quiet=1
-  inferred from enum spacing, not independently button-tested). Exposed both via the
-  climate entity's `fan_mode` and a dedicated HA `select` entity.
-- **Control from Home Assistant** — power, mode, target temperature, fan speed, and
-  Economy mode have all been exercised live via the HA API against the real unit, gated
-  behind an "Aircon Control Enabled" switch that is **on by default** (restored on every boot);
-  turn it off at any time from HA or the web UI to drop back to read-only monitoring. See
-  `state-of-play.md`'s "4A" sessions for the live-confirmation history of each field.
-- **Diagnostic sensors** — IP address, WiFi signal strength, uptime, free heap, bus
-  status/alive, status LED pattern.
-- **Thermo Sensor Icon** — read-only binary sensor for the wired controller's "own sensor in
-  use" icon (byte 5 bit 7 of the frame addressed to us). Live-confirmed 28 Oct 2026: HA matches
-  the wired display at all times. Two-way control is a future task.
-- **Swing Icon** — read-only On/Off for the swing icon (byte 5 bit 2). Matches the wired
-  remote's icon while the unit is running; with the unit off/standby the remote hides the icon
-  but the entity still reads On (known quirk, tested 28 Oct 2026).
-- **Defrost Active** — binary sensor from byte 2 bit 3 of the frame not addressed to us
-  (fw 4A.10); identified on one live defrost cycle, a second is still to do.
-- **Sync and attribution** — In Sync / Sync Mismatch / Out of Sync Since (requested vs actual
-  state) and Last Change Source / Detail (who changed what: HA, Human or Boot).
-- **Tidy Home Assistant page** — entities grouped as Controls / Sensors / Diagnostic with
-  nothing in "Configuration" (see [Home Assistant](#home-assistant)).
-- **Status LED** — Visual feedback on the ESP32 board (GPIO2); read-only diagnostic, not
-  a controllable entity.
-- **Web interface** — ESPHome's built-in web server for local access.
-- **Non-invasive installation** — connects as a secondary (slave) controller; the existing
-  wired controller keeps working normally, with no modification to the heat pump or the controller.
+### Why you might not want this
 
-### Experimental / in progress
-- **Two-way control of the Thermo Sensor icon** — future task. The ESP32 can only clear the
-  icon, never set it (`docs/session-5B-defrost-2026-10-17.md`; `PROTOCOL.md` Open Question 3).
-- **Defrost / oil recovery detection** — Defrost Active exists but rests on one live cycle;
-  whether Oil Recovery sets the same bit is untested. See the Roadmap below.
-- **OTA updates** — works, with one caveat: native ESPHome OTA fails if `logger: level:
-  VERBOSE` is set (use the curl route below instead in that case).
-
-### Climate Controls (see status above for what's actually reliable today)
-| Control | Options | Status |
-|---------|---------|--------|
-| Power | On / Off | Decoded and control both live-confirmed |
-| Mode | Auto, Cool, Heat, Dry, Fan Only | Decoded and control both live-confirmed |
-| Target Temperature | 16°C – 30°C | Decoded and control both live-confirmed, all modes including HEAT/AUTO |
-| Fan Speed | Auto, Low, Medium, High (Quiet optional, off by default) | Decoded and live-confirmed; exposed via a dedicated select entity |
-| Economy | On / Off | Decoded and control both live-confirmed, both as a climate preset and a standalone switch |
-
-> **Quiet fan speed is off by default.** On the ART30LUAK + UTY-RNNUM it does not work: the
-> indoor unit briefly obeys it, then the wired controller (which has no Quiet state) overwrites
-> it with High a second later, so the display shows High while the fan runs at Low. Quiet also
-> cannot be selected from the wired remote. If your unit supports Quiet, set
-> `quiet_fan_mode: true` on the `climate:` block in `retrofujitsu.yaml` and add `- "Quiet"` to
-> the Fan Speed select.
-
-### Sensors
-| Sensor | Description | Status |
-|--------|-------------|--------|
-| Target Temperature | Current setpoint | Working, all modes including HEAT/AUTO |
-| Current Temperature | Room temperature (wired controller's own thermistor) | Working — see Protocol |
-| Fan Speed | Auto/Low/Medium/High (Quiet optional) | Working |
-| Economy | On/Off | Working, decoded and controllable |
-| Thermo Sensor Icon | Wired controller is using its own sensor | Working, live-confirmed 28 Oct 2026; read-only (two-way control is a future task) |
-| Swing Icon | Wired remote's swing icon (On/Off) | Working while the unit is running; reads On when off/standby (known quirk) |
-| Defrost Active | Defrost / oil-recovery icon | Working (fw 4A.10), from one live cycle |
-| In Sync / Sync Mismatch / Out of Sync Since | Requested vs actual unit state | Working |
-| Last Change Source / Detail | Who last changed the state (HA / Human / Boot) and what changed | Working (fw 4A.12a) |
-| Raw Frame To Us / Other | Last raw frame addressed to us / to others (diagnostic) | Working (fw 4A.9) |
-| WiFi Signal | RSSI in dBm | Working |
-| IP Address | Device IP on local network | Working |
-| Uptime | Time since last reboot | Working |
-| Free Heap | ESP32 memory (for diagnostics) | Working |
+- If your unit has an **official, supported Wi-Fi adapter** that does what you need, use that.
+- If you are **not comfortable working near electrical equipment**, get an electrician or HVAC
+  technician to do the wiring. You are connecting to the heat pump's control bus.
+- If you need a **warranty or an installer's sign-off**, check first. Modifying or adding to the control
+  wiring may affect either.
+- It is a **hobby project tested on one unit**. If you want something that just works out of the box,
+  this is not that yet.
 
 ---
 
-## How It Works
+## Will it work with my unit?
+
+**Tested:**
+
+| Part | Model |
+|------|-------|
+| Indoor unit | Fujitsu **ART30LUAK** (about 2010) |
+| Outdoor unit | Fujitsu **AOT30LMBDL** |
+| Wired controller | Fujitsu **AR-3TA3 / UTB-TUB** simple wired remote |
+| Microcontroller | ESP32-WROOM-32 (classic ESP32) |
+
+**Worth trying if** your Fujitsu heat pump has a wired wall controller connected by **three wires**
+(power, data and ground) to the indoor unit. Fujitsu's wired controllers of this generation are
+believed to share the same bus protocol, but that is not confirmed beyond the tested unit.
+
+**Probably will not work if** your heat pump only has an infrared remote, or is a different brand with a
+different bus (Mitsubishi Heavy Industries units, for example, are reported to use a different 2-wire bus).
+
+**Untested:** ESP32-S3 and other ESP32 variants, and units other than the one above. The *Contributing* section at the end says how to report your results.
+
+> **Try it safely:** build and test it on the bench first, **not** connected to the heat pump (see the
+> Quick start). When you do connect it, watch the first few minutes.
+
+---
+
+## What you need
+
+As a rough guide, allow **a weekend** if you have used ESPHome before, and a bit longer if this is your
+first ESP project (that is an estimate, not a measurement). The parts are easy to find on eBay and
+AliExpress. They come to a few tens of US dollars in total, but prices vary a lot by seller, so check
+current listings.
+
+| Part | What it does | What to search for | Notes |
+|------|--------------|--------------------|-------|
+| **ESP32 dev board** | The brain: Wi-Fi, ESPHome, Home Assistant | `ESP32-WROOM-32 38 pin development board USB-C`, `ESP32 DevKitC-32` | The tested board is a classic ESP32-WROOM-32. Avoid ESP32-S3 / C3 unless you are happy to experiment. |
+| **Screw-terminal breakout** (recommended) | Gives each pin a screw terminal, so there is no soldering and the wiring stays put | `ESP32 38 pin breakout board screw terminal`, `ESP32 expansion board 38P GPIO` | **It must match your board's pin spacing.** Most fit the "38 pin narrow, no mounting holes" boards, not the wider DevKit V1 style. Buy a matching set if you can. |
+| **LIN module (LINTTL3)** | Converts the heat pump's LIN bus (about 12 V) to the ESP32's 3.3 V serial | `LINTTL3`, `TTL UART to LIN bus module TJA1021`, `LIN bus converter module 12V 24V` | It must be a **LIN** module, not CAN. The pins are VIN, INH, LIN, GND, RX, SLP and TX. |
+| **12 V to USB power module** | Powers the ESP32 from the heat pump's 12 V | `12V to 5V USB buck converter module`, `DC-DC step down 12V to USB 5V 3A` | Make sure the input range covers your bus voltage with margin. Check the listing. |
+| **Wire and connectors** | Joins everything up | `Dupont jumper wires female to female`, `wire ferrules`, `lever wire connectors`, `heat shrink` | Plus a USB cable to match the ESP32's port (USB-C or micro-USB). |
+| *Optional:* **enclosure** | Keeps dust off and holds it in place | `small ABS project box`, `plastic junction box` | Leave ventilation, and keep it away from heat. |
+| *Tools:* **multimeter** | Identifies the wires and checks voltages | any basic digital multimeter | Treat this one as essential. |
+
+Also needed: small screwdrivers, wire strippers, and a computer to flash the ESP32 and run ESPHome.
+
+---
+
+## Skills you need
+
+**Essential**
+
+- **Basic electrical safety.** You will turn the heat pump off at the breaker and work on low-voltage
+  wiring. If the indoor unit is in a ceiling or roof space, take access and footing seriously.
+- **Using a multimeter** to check DC voltage and find which wire is which.
+- **Following a wiring diagram** carefully, including checking that all the grounds are common.
+- **Running a few commands** and editing a text file (your Wi-Fi name and password).
+- **Using Home Assistant** well enough to add an ESPHome device.
+
+**Helpful but optional**
+
+- **Soldering.** Most LIN modules ship with pin headers already fitted, so a screw-terminal breakout
+  and jumper wires avoid it. Check the listing photos. If the pins are not fitted, you will need to solder.
+- Previous ESPHome experience (it makes the flashing steps routine).
+- A 3D-printed or off-the-shelf box for a tidy install.
+
+**If you are unsure about any of the essentials,** ask someone who is, or get a professional to do the
+wiring. The software side is the easy part.
+
+---
+
+## How it works
 
 ```
-Fujitsu Heat Pump (Indoor Unit)
-        <->  LIN Bus (500 baud, 8E1)
-  linttl3 Module (TJA1021)
-        <->  TTL UART (3.3V)
-    ESP32-WROOM-32
-        <->  WiFi
-    Home Assistant
+Fujitsu indoor unit  <->  3-wire bus (LIN, 500 baud)
+                              |
+                       LINTTL3 module  (12 V LIN <-> 3.3 V serial)
+                              |
+                       ESP32 + ESPHome  <->  Wi-Fi  <->  Home Assistant
 ```
 
-The Fujitsu indoor unit communicates with controllers using a **LIN bus** running at
-**500 baud, 8E1** (switched from 8N1 as of firmware 3B.21 — see UART Configuration
-below). The linttl3 module converts the 12V/24V LIN bus signals to 3.3V TTL
-levels suitable for the ESP32's UART.
-
-The ESP32 listens to frames on the bus and decodes them into Home Assistant. Injecting
-control frames as a secondary controller is implemented but experimental (see Features) —
-the existing wired controller continues to operate normally either way.
+The wired controller and the indoor unit talk over a single-wire LIN bus. The ESP32 joins as a
+**secondary (slave) controller**: it listens to every frame, publishes the state to Home Assistant, and
+when you change something, it sends that change as the reply to the next frame the unit addresses to it.
+The wired controller stays on the bus the whole time.
 
 ---
 
 ## Wiring
 
-### Safety Warning
-**Turn off the heat pump at the breaker before opening the indoor unit or making any
-connections.**
+<p align="center">
+  <img src="docs/images/wiring.svg" alt="Wiring diagram: the heat pump bus to the LINTTL3 module to the ESP32, with a 12 V to USB power module" width="760">
+</p>
 
-### Connection Overview
+> **Turn the heat pump off at the breaker before opening the indoor unit or the wired controller.**
+> This is low-voltage work (about 12 V), with no mains wiring, but do not skip this step.
 
-```
-Fujitsu Indoor Unit (ART30LUAK)
-  Remote Controller Connector (CN-REM or similar)
-    Pin 1: 12V or 24V Power  ---> linttl3 VIN
-    Pin 2: LIN Bus (Data)    ---> linttl3 LIN
-    Pin 3: Ground            ---> linttl3 GND (power side)
+1. **Find the three bus wires.** They run between the wired controller and the indoor unit: about 12 V
+   power, the LIN data wire, and ground. You can connect either at the wired controller's terminals or
+   at the indoor unit's remote-controller terminals. Use the terminal markings in your unit's manual or
+   the controller's installation sheet, then use a multimeter (DC volts) to confirm which wire is
+   **ground** and that the supply wire reads about 12 V against it. **Do not guess the order.**
+   Connecting the wrong wire to VIN can damage the LIN module. If you are not sure, ask in an issue
+   before connecting anything.
+2. **Connect in parallel:** the wired controller stays connected. You are adding the ESP32 alongside it.
+3. **Bus to the LIN module:** LIN data to **LIN**, +12 V to **VIN**, ground to **GND**. Leave **SLP** and
+   **INH** unconnected.
+4. **LIN module to the ESP32:** module **TX** to ESP32 **GPIO16 (RX2)**, module **RX** to ESP32
+   **GPIO17 (TX2)**, and module **GND** to ESP32 **GND**.
+5. **Power the ESP32:** connect the 12 V to USB module's input to the same +12 V and ground, and plug its
+   USB output into the ESP32.
+6. **Common ground:** the heat pump ground, the LIN module and the ESP32 must all share a ground.
 
-linttl3 Module (TJA1021)
-    TX  ---> ESP32 GPIO16 (RX2)
-    RX  <--- ESP32 GPIO17 (TX2)
-    GND ---> ESP32 GND
-    SLP, INH: leave unconnected
+| LIN module | Connects to |
+|------------|-------------|
+| VIN | Bus +12 V |
+| LIN | Bus data wire |
+| GND | Bus ground (and the ESP32 GND) |
+| TX | ESP32 GPIO16 (RX2) |
+| RX | ESP32 GPIO17 (TX2) |
+| SLP, INH | Not connected |
 
-ESP32-WROOM-32
-    GPIO16 (RX2) <- linttl3 TX
-    GPIO17 (TX2) -> linttl3 RX
-    GND          <- linttl3 GND
-    GPIO2        -> Status LED
-    USB          -> Laptop/Power (bring-up only)
-```
+**Notes**
 
-### Pin Summary
-
-| linttl3 Pin | Connects To | Notes |
-|-------------|-------------|-------|
-| VIN | Heat pump 12V/24V | Power for module |
-| LIN | Heat pump LIN wire | Data line |
-| GND (power side) | Heat pump GND | Common ground |
-| TX | ESP32 GPIO16 | Data to ESP32 |
-| RX | ESP32 GPIO17 | Data from ESP32 |
-| GND (MCU side) | ESP32 GND | Common ground |
-| SLP | Not connected | Leave floating |
-| INH | Not connected | Leave floating |
-
-### Critical: Common Ground
-All three devices (heat pump, linttl3, ESP32) **must share a common ground**. Without this,
-communication will not work.
-
-### Critical: pull-up on GPIO16 (RX)
-Without a pull-up, the floating pin will crash the ESP32 whenever it's powered but not yet
-wired to the bus — exactly the bench-test condition below.
+- The labels on LIN modules are from the **module's** side of the connection, so the module's TX goes to
+  the ESP32's RX pin. If *Bus Status* says there is no signal, swap the two data wires.
+- GPIO16 needs a pull-up so it does not float when the board is powered but not wired up. The firmware
+  turns it on, so you do not need to add one.
+- The bus runs at 500 baud, 8 data bits, even parity, 1 stop bit (8E1), with normal polarity.
+- The status LED on GPIO2 (the board's onboard LED) shows the connection state. See
+  [docs/FEATURES.md](docs/FEATURES.md) for the patterns.
 
 ---
 
-## UART Configuration
+## Quick start
 
-| Parameter | Value |
-|-----------|-------|
-| Baud Rate | **500 bps** |
-| Data Bits | **8** |
-| Parity | **Even (8E1)** — see note below |
-| Stop Bits | **1** |
-| Logic | Normal (not inverted) |
+1. **Bench-test first.** Flash the ESP32 and add it to Home Assistant **before** you go near the heat
+   pump. A failed flash is then just a USB cable away from recovery.
+2. **Install the tools.** You need [Git](https://git-scm.com/downloads) and
+   [ESPHome](https://esphome.io/), installed with pip. This version is built and tested on
+   **ESPHome 2026.10.1**, so pin it (ESPHome removes things often):
 
-> **Updated, 2 Sep 2026:** this table previously said "Parity: None" (8N1). As of firmware
-> 3B.21 the UART runs **8E1** — receiving works identically either way (the parity bit
-> doesn't affect the data bits), but transmit needs even parity to be accepted by the bus.
-> This was switched on upstream's explicit recommendation; see `PROTOCOL.md` and
-> `upstream-comparison.md`.
+   ```
+   pip install esphome==2026.10.1
+   ```
 
----
+   - **Windows:** turn on long paths before the first build (set `LongPathsEnabled` to 1 under
+     `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, then reboot). The ESP-IDF toolchain that
+     ESPHome downloads has paths over 260 characters, and without this the build fails with confusing
+     errors. The first build downloads a few GB.
+   - Still on **ESPHome 2025.4.2**? Use the tag `esphome-2025.4.2` instead
+     (`git checkout esphome-2025.4.2`).
+3. **Get the code and add your Wi-Fi details.**
 
-## Protocol
+   ```
+   git clone https://github.com/endofthewurst/Retro-Fujitsu-ESPHome.git
+   cd Retro-Fujitsu-ESPHome
+   copy secrets.yaml.template secrets.yaml
+   notepad secrets.yaml
+   ```
 
-The bus runs a repeating **16-byte cycle**: one 8-byte **UNIT frame** (the indoor unit's
-status) immediately followed by one 8-byte **CTRL frame** (the wired controller's frame).
-This is confirmed structurally across 1112 captured frames with zero sync errors — it is
-**not** the single 8-byte frame model used by some other Fujitsu ESPHome projects; those
-target different frame markers for different unit families.
+   (On macOS or Linux use `cp` and your editor.) Fill in `wifi_ssid` and `wifi_password`.
+4. **Check the config, then flash over USB** (the first time, with the ESP32 plugged into your computer
+   and **not** connected to the heat pump):
 
-### UNIT frame
+   ```
+   esphome config retrofujitsu.yaml
+   esphome run retrofujitsu.yaml
+   ```
+5. **Add it to Home Assistant:** *Settings, Devices & Services, ESPHome.* The device **Aircon** should
+   appear automatically. Click **Configure** and add it.
+6. **Wire it up** (see above) and power it from the heat pump's 12 V.
+7. **Check it is working:**
+   - *Bus Alive* is on and *Bus Status* reads **Bus OK**.
+   - The room temperature matches the wired controller's display.
+   - Changing the mode or fan speed on the wired controller shows up in Home Assistant within seconds.
+   - **Then, and only then,** try a change from Home Assistant, such as fan speed, and confirm it
+     sticks on the wired controller's display. Control is on by default. If you would like to start
+     read-only, turn *Aircon Control Enabled* off first.
 
-| Byte | Content |
-|------|---------|
-| 0 | `0xFE` — start marker, fixed |
-| 1 | `0xDF` — fixed |
-| 2 | `0xDF` — fixed |
-| 3 | `0x7F` — fixed |
-| 4 | `0xFF` — fixed |
-| 5 | `B5` — state byte A: setpoint + mode nibble |
-| 6 | `B6` — state byte B: mode bits (upper bits not yet mapped) |
-| 7 | `0x6B` — end marker, fixed |
+**Later updates** can go over the air once the board is installed (`esphome run retrofujitsu.yaml
+--device <ip-address>`). Do not reflash over USB while it is wired into the heat pump unless you have to.
 
-### CTRL frame
-
-| Byte | Content |
-|------|---------|
-| 0 | `C0` — fan/power/mode bit; the only byte with controller state |
-| 1 | `0xFF` — fixed |
-| 2 | `0xFF` — fixed |
-| 3 | `0x5F` at rest, `0x7E` briefly during a settings change |
-| 4 | `0xFF` — fixed |
-| 5 | `B5` — mirrors UNIT B5 |
-| 6 | `B6` — mirrors UNIT B6 |
-| 7 | `0x4B` — end marker, fixed |
-
-### Decoded fields (confirmed, ground-truthed against the physical controller)
-
-**Power** — CTRL byte 0 (`C0`), bit 1: `0xCE` = ON, `0xCC`/`0xCD` = OFF.
-
-**Mode** — a *pair* of fields, not one: `{B6 bits[2:0], C0 bit 0}`.
-
-| Mode | B6[2:0] | C0 bit 0 |
-|------|---------|----------|
-| COOL | 3 | 0 |
-| FAN  | 3 | 1 |
-| DRY  | 7 | 1 |
-| HEAT | 0 | 1 |
-| AUTO | 0 | 0 |
-
-**Target temperature** — `B5` bits [4:1]: `temp_c = ((B5 >> 1) & 0x0F) + 16`. Confirmed for
-COOL and DRY. HEAT/AUTO looked unresolved under this addressing (both modes read the same
-`B5` value regardless of setpoint) — **resolved 8 Aug 2026 under the corrected/upstream
-addressing below**, where HEAT and AUTO are separate fields and both read correctly.
-
-### Fan speed and room temperature — resolved (8 Aug 2026), live-confirmed (11 Aug 2026)
-
-Both of these were briefly believed undecodable under the byte addressing above (every byte
-thought to carry fan speed was constant across all 1112 captured frames; the byte assumed to
-carry room temperature turned out to carry mode information instead).
-
-**The fix: invert every received byte (`^= 0xFF`) and read the frame starting two bytes
-later than the naive `0xFE` sync point.** This aligns the traffic with the field layout used
-by other published Fujitsu LIN implementations, and once applied:
-
-- **Fan speed** is bits [6:4] of the corrected byte 3. Live-confirmed by cycling the
-  physical Fan Speed button (High→Medium→Low→Auto): **Auto=0, Low=2, Medium=3, High=4**
-  (Quiet=1 inferred from spacing, not independently button-tested). This has been the
-  `fan_mode` driving the climate entity — and, since firmware 4A.2, a dedicated HA `select`
-  entity — since firmware 3B.18.
-- **Room/controller temperature** is bits [6:1] of the corrected byte 6, and is live and
-  feeding the climate entity's current temperature.
-
-This is not a hypothesis anymore — it's the layout the current firmware actually implements
-(`components/fujitsu_climate/FujiHeatPump.cpp`). See the project's own `hardware-and-protocol.md`
-("Current field decoding" section) and `PROTOCOL.md`'s revision notes for the full field
-table and derivation; the byte tables above in this README describe the original,
-now-superseded addressing and are kept for historical/structural reference (frame length,
-sync markers, etc. are still accurate).
+> Native ESPHome OTA fails if `logger: level: VERBOSE` is set. Use `curl.exe -F "file=@firmware.bin"
+> http://<esp32-ip>/update` in that case.
 
 ---
 
-## Software Setup
+## What you get in Home Assistant
 
-### Prerequisites
-- [ESPHome](https://esphome.io/) **2026.x**, tested on **2026.10.1**, installed on Windows via pip: `pip install esphome==2026.10.1`
-- [Git](https://git-scm.com/download/win) installed
-- Home Assistant with the ESPHome integration
-
-> **ESPHome versions.** This version is built and tested on ESPHome **2026.10.1**. ESPHome
-> removes APIs often (that is what broke issue #3), so pin the tested version rather than
-> using the latest. Other 2026.x releases are untested; 2026.5.0 or newer is expected to be
-> needed. If you are on **ESPHome 2025.4.2**, use the tag `esphome-2025.4.2` instead
-> (`git checkout esphome-2025.4.2`).
->
-> **Windows:** enable long paths before the first build (`LongPathsEnabled` = 1 under
-> `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, then reboot). The ESP-IDF toolchain
-> ESPHome 2026.x downloads has paths longer than 260 characters, and without this the build
-> fails with cryptic errors. The first build downloads a few GB.
-
-### Installation
-
-#### 1. Clone the Repository
-```batch
-git clone https://github.com/endofthewurst/Retro-Fujitsu-ESPHome.git
-cd Retro-Fujitsu-ESPHome
-```
-
-#### 2. Create Secrets File
-```batch
-copy secrets.yaml.template secrets.yaml
-notepad secrets.yaml
-```
-
-Edit with your WiFi credentials:
-```yaml
-wifi_ssid: "YourWiFiName"
-wifi_password: "YourWiFiPassword"
-```
-
-#### 3. Validate Configuration
-```batch
-esphome config retrofujitsu.yaml
-```
-
-#### 4. Flash to ESP32
-
-**First flash, and any time firmware is being trusted for the first time:** do it with the
-board powered but **not yet wired to the LIN bus**. In that state OTA is just as safe as USB
-— a failed flash is a USB cable away from recovery, since the board isn't installed yet.
-Only wire it into the heat pump once you've confirmed the new firmware boots and reconnects
-cleanly.
-
-```batch
-esphome run retrofujitsu.yaml --device <esp32-ip-or-hostname>
-```
-
-If the board isn't reachable on the network yet (e.g. very first flash ever), fall back to
-USB:
-```batch
-esphome run retrofujitsu.yaml
-```
-
-**Later updates**, once the board is installed and on the bus, are OTA-only — don't reflash
-over USB while it's wired into the wall unless you have to.
-
-> Native ESPHome OTA (port 3232) fails if `logger: level: VERBOSE` is set. If that's the
-> case, use `curl.exe -F "file=@firmware.bin" http://<esp32-ip>/update` instead.
-
-#### 5. Add to Home Assistant
-1. Go to **Settings** -> **Devices & Services** -> **ESPHome**
-2. Device **"Aircon"** should appear automatically
-3. Click **Configure** and add it
-
----
-
-## LED Status Indicators
-
-The onboard LED (GPIO2) shows the current status:
-
-| Pattern | Meaning |
-|---------|---------|
-| 3 quick flashes | Boot sequence |
-| Single flash every 2s | WiFi connected |
-| Slow blink (500ms/1500ms) | WiFi OK, waiting for HA |
-| Medium blink (300ms/700ms) | HA disconnected |
-| Fast blink (200ms/200ms) | WiFi error |
-
----
-
-## Home Assistant
-
-Once connected, the **Aircon** device appears in Home Assistant. Entity IDs are prefixed
-with the device name (`aircon`), e.g.:
-
-```yaml
-type: thermostat
-entity: climate.aircon_fujitsu_heat_pump
-```
-
-### Device page layout
-
-The **Aircon** device page is grouped as **Controls / Sensors / Diagnostic**. Home Assistant
-builds these groups from each entity's `entity_category` (custom groups are not possible), and
-the firmware never uses `config`, so there is no "Configuration" group.
+<p align="center">
+  <img src="docs/images/ha-device-page.jpg" alt="The Aircon device page in Home Assistant, grouped as Controls, Sensors and Diagnostic" width="420">
+</p>
 
 | Group | Entities |
-|---|---|
-| Controls | Fujitsu Heat Pump (climate), Fan Speed, Economy Mode, Aircon Control Enabled |
-| Sensors | Room Temp, Thermo Sensor Icon, Swing Icon, Defrost Active, In Sync, Sync Mismatch, Out of Sync Since, Last Change Source, Last Change Detail |
-| Diagnostic | Bus Alive, Bus Status, Raw Frame To Us / Other, Setpoint, Set Temperature, Thermo Sensor Experiment, Thermo Sensor Write Test, Restart, Safe Mode Boot, Status, Status LED Pattern, ESPHome Version, GitHub Repository, Uptime, Free Heap Memory, WiFi Signal / SSID, IP / MAC Address |
+|-------|----------|
+| **Controls** | Fujitsu Heat Pump (climate), Fan Speed, Economy Mode, Aircon Control Enabled |
+| **Sensors** | Room Temp, Defrost Active, In Sync, Sync Mismatch, Out of Sync Since, Last Change Source, Last Change Detail, Swing Icon |
+| **Diagnostic** | Bus Alive, Bus Status, Setpoint, Raw Frame To Us / Other, Thermo Sensor Icon, Uptime, Free Heap, Wi-Fi signal, ESPHome Version, Restart, Safe Mode Boot |
 
-The local ESPHome web page stays a flat list: ESPHome's `sorting_groups` need `web_server`
-version 3, and this project uses version 2 (the v3 UI only rendered entities that republished
-after the page loaded).
+The full list, what each entity means, and how the *Last Change Source* and *In Sync* logic works are in
+[docs/FEATURES.md](docs/FEATURES.md).
+
+### Quiet fan speed is off by default
+
+On the tested unit, Quiet does not work: the indoor unit briefly obeys it, then the wired controller
+(which has no Quiet state) overwrites it with High, so the display shows High while the fan runs at
+Low. Quiet also cannot be chosen from the wired remote. Quiet is therefore hidden from Home Assistant.
+If your unit supports it, set `quiet_fan_mode: true` on the `climate:` block in `retrofujitsu.yaml` and
+add `- "Quiet"` to the Fan Speed select.
+
+---
+
+## Known limitations
+
+- **Tested on one unit** and one wired controller (see [Will it work with my unit?](#will-it-work-with-my-unit)).
+- **ESPHome version:** tested on 2026.10.1. Other 2026.x releases are untested, and 2026.5.0 or newer
+  is expected to be needed. For 2025.4.2 use the tag `esphome-2025.4.2`.
+- **Classic ESP32 only** has been tested. ESP32-S3 and others are untested.
+- **Fan-only mode has no target temperature**, so the setpoint reads blank there.
+- **After a reboot,** *In Sync* can read off while the unit is running, until Home Assistant sets the
+  power state.
+- **Swing Icon** reads On while the unit is off or in standby (the wired controller hides the icon).
+- **Thermo Sensor icon** is read-only: the ESP32 can clear the icon but not set it.
+- **Defrost detection** was worked out from one live defrost cycle. A second one is still to be checked.
+- **Security defaults:** as shipped, the Home Assistant API is not encrypted, OTA updates have no
+  password, and the web page on port 80 has no login. That is common for a trusted home network. If
+  yours is not, add ESPHome's `api` encryption key, an `ota` password and `web_server` authentication.
+- **Fallback hotspot:** if the board cannot join your Wi-Fi it opens a hotspot called `Aircon-Fallback`
+  with the password `fallback123`, which is public in this repository. Change that password in
+  `retrofujitsu.yaml` before installing, because anyone in range could otherwise connect while your
+  Wi-Fi is down.
 
 ---
 
 ## Troubleshooting
 
-### No Frames Received
-- Check linttl3 is powered (LED on if equipped)
-- Verify common ground between all devices
-- Check TX/RX aren't swapped (linttl3 TX -> ESP32 GPIO16)
-- Confirm baud rate is 500, 8E1 (not 8N1 — see UART Configuration above)
+**No frames / Bus Status says no signal**
+- Check the LIN module has power, and that all grounds are common.
+- Swap the two data wires: the module's TX should go to the ESP32's GPIO16 (see the notes in Wiring).
+- Make sure you are using a LIN module, not a CAN module.
 
-### Room Temperature / Fan Speed Show Nothing
-Both are decoded and should show real values as of firmware 3B.18 (see Protocol above). If
-they're genuinely blank, that points to a real problem — check firmware version and bus
-health (`binary_sensor.house_aircon_bus_alive`) rather than assuming it's expected.
+**The ESP32 keeps rebooting after flashing**
+- If you are bench-testing without the bus connected, check the GPIO16 pull-up is on (the firmware does
+  this). Look at the logs over USB.
 
-### Target Temperature Wrong in HEAT or AUTO
-Was a known issue under the original byte addressing — resolved 8 Aug 2026 under the
-corrected addressing (see Protocol above). If you're still seeing this on current firmware,
-it's a regression worth reporting, not expected behaviour.
+**The device does not appear in Home Assistant**
+- Check the ESP32 is on Wi-Fi (its web page should load), restart Home Assistant, or add it manually
+  with the IP address.
 
-### Device Not Appearing in Home Assistant
-- Check the ESP32 is on WiFi (web interface accessible)
-- Restart Home Assistant
-- Try adding manually with the IP address
+**A change in Home Assistant is reverted a moment later**
+- On ESPHome 2026.x this needs the reply-timing fix that came with 4A.13-rc1, so make sure you are on
+  that version or newer. The details are in [docs/PROJECT-HISTORY.md](docs/PROJECT-HISTORY.md).
+- If it still happens, try the fan speed first: it is the best-tested control. Quiet is expected to revert
+  (see above).
 
-### ESP32 Crash Loop After Flashing
-- Check the GPIO16 pull-up is in place if bench-testing unwired
-- Check for compilation errors
-- Ensure `setup()` doesn't block waiting for UART
+**Build fails with odd path errors on Windows**
+- Turn on long paths (see the Quick start).
 
----
-
-## Debug Logging
-
-Set `logger: level: DEBUG` (or `VERBOSE` for even more) in `retrofujitsu.yaml` and enable
-the component's own debug flag:
-
-```yaml
-logger:
-  level: DEBUG
-
-fujitsu_climate:
-  - id: aircon
-    # ... other options ...
-    debug: true
-```
-
-With debug logging on, each cycle logs the raw UNIT and CTRL frames as hex, plus a
-field-by-field breakdown (`B5=...`, `B6=...`) and the decoded state line. Sending a command
-additionally logs the frame the firmware built and the checksum calculation before
-transmitting it — useful for checking transmit attempts against what's actually observed on
-the bus, given transmit is still experimental.
+**You want to see what the firmware is doing**
+- Set `logger: level: DEBUG` in `retrofujitsu.yaml` and watch the logs (`esphome logs retrofujitsu.yaml`).
+  You will see control requests and lines such as *Change attributed to HA* or *Human*.
 
 ---
 
-## Project History & Phases
+## Documentation
 
-- **Feb 2026** — Baseline ESP32 + ESPHome, diagnostics, LED patterns, Fujitsu component
-  compiling in listen-only mode with no hardware connected.
-- **29 Apr 2026** — Hardware wired up for the first time. Six capture sessions against the
-  live unit while cycling the wired controller through modes and settings. The 16-byte
-  UNIT+CTRL structure, mode identification, and power bit were all cracked in a single
-  afternoon and published to Home Assistant.
-- **May-Jul 2026** — Dormant.
-- **8-11 Aug 2026** — Recovered and consolidated the local working tree; found and fixed
-  the fan-speed and room-temperature decode (both had been misreported as confirmed under
-  the original byte addressing — the fix was inverting every byte and re-syncing 2 bytes
-  later); both live-confirmed against the real unit. HEAT/AUTO setpoint resolved the same
-  way.
-- **Aug-Sep 2026** — Adopted a vendored upstream transmit/decode engine; control from Home
-  Assistant (power, mode, target temperature, fan speed, Economy) confirmed live against
-  the real unit, gated behind an explicit kill switch. Corrected the wired controller's
-  model identification (AR-3TA3/UTB-TUB, not UTY-RNNUM) and documented the optional
-  UTD-RS100 remote sensor.
-- **Oct 2026** — Installed in the house, bus-powered. Found the Thermo Sensor icon bit
-  (byte 5 bit 7 of frames addressed to us); firmware 4A.9 adds read-only monitoring and
-  split raw-frame diagnostics. A write test had no effect. RoomMind configuration reviewed.
-- **17 Oct 2026** — Firmware 4A.10: Defrost Active binary sensor (byte 2 bit 3 of the frame not
-  addressed to us, found on a live cold-morning cycle); the noisy "unconfirmed" text sensors
-  retired. 4A.11: Thermo Sensor Experiment select — writing the icon bit can only clear the
-  icon, never set it.
-- **Late Oct 2026** — Firmware 4A.12 / 4A.12a: control-authority attribution (Last Change
-  Source / Detail). 4A.12 also added an event entity that crash-looped the installed board;
-  4A.12a dropped it and uses text sensors only.
-- **27–28 Oct 2026** — Home Assistant device page regrouped as Controls / Sensors /
-  Diagnostic (nothing left in "Configuration"). Thermo Sensor Icon live-confirmed; the Swing
-  sensor was tested against the wired remote, renamed "Swing Icon" and moved to Sensors.
-  Release candidate **4A.12b-rc1**.
-- **3 Nov 2026** — Ported to ESPHome 2026.x (issue #3, reported by a user): `climate_schema()`
-  and feature-flag API changes, plus a reply-timing fix. Arduino-ESP32 3.x hands received
-  bytes to the code ~31 ms sooner than 2.x did, so replies went out ~31 ms early and the
-  wired controller reverted HA's changes ~0.8 s later; a 31 ms reply gap restores the old
-  behaviour (verified on hardware). Added `quiet_fan_mode` (default off). The last
-  ESPHome 2025.4.2 commit is tagged `esphome-2025.4.2`. Release candidate **4A.13-rc1**.
-
-The transmit path is live and has been exercised successfully for several fields (see
-Climate Controls above), but hasn't been through the same volume of testing as decode —
-treat it as working-but-young rather than as mature as decode. The wired controller's Thermo
-Sensor icon is decoded and monitored read-only (live-confirmed 28 Oct 2026; the ESP32 can clear
-it but not set it); Defrost Active exists but rests on one live cycle. See the Roadmap below.
+- [docs/FEATURES.md](docs/FEATURES.md): every feature and entity, the status LED patterns, and how the Home Assistant page is laid out
+- [docs/HARDWARE-NOTES.md](docs/HARDWARE-NOTES.md): the tested hardware, corrections to earlier model numbers, and the UART settings
+- [docs/PROTOCOL-SUMMARY.md](docs/PROTOCOL-SUMMARY.md) and [PROTOCOL.md](PROTOCOL.md): the bus protocol, frames and decoded fields
+- [docs/PROJECT-HISTORY.md](docs/PROJECT-HISTORY.md): how the project got here, and the roadmap
 
 ---
 
-## Roadmap / To do
+## Credits and references
 
-Full detail: `docs/session-5A-checkin-2026-10-03.md`, `docs/session-5B-defrost-2026-10-17.md`, `docs/session-5C-entity-layout-2026-10-28.md`.
+This project stands on the work of:
 
-### A. Thermo Sensor icon — monitoring confirmed, two-way control is a future task
-- [x] **A1. Monitor.** The icon is byte 5 bit 7 (0x80) of the frame addressed to us (`84` = shown, `04` = off); exposed as `binary_sensor` "Thermo Sensor Icon" (fw 4A.9). **Live-confirmed 28 Oct 2026:** HA matches the wired display at all times.
-- [x] **A2.** Second confirmation — covered by the 28 Oct 2026 test.
-- [x] **A3.** Retire the noisy `thermo_sensor_unconfirmed` / `unknown_bit_unconfirmed` / `raw_frame_unconfirmed` diagnostics — done in 4A.10.
-- [ ] **A4.** Establish what the icon actually changes (the 21.0 vs 19.7 °C room-temperature gap is *not* explained by it).
-- [ ] **A5. Two-way control (future task).** From the ESP32 the icon can only be *cleared* (ORing 0x8 into the `updateMagic` nibble of a STATUS reply; one-shot). Six variants tried in 4A.11 never set it. Turning it on needs another field or message type, probably reachable only by emulating the wired controller, which is **not** recommended (ESP32 is never the boss). Alternative: accept off-only plus an HA-side advisory.
-- [ ] **A6.** Keep or remove the "Thermo Sensor Write Test" switch; the "Thermo Sensor Experiment" select is no longer needed.
+- **[Myles Eftos / unreality](https://github.com/unreality/FujiHeatPump):** Arduino library and protocol reverse engineering
+- **[jaroslawprzybylowicz/fuji-iot](https://github.com/jaroslawprzybylowicz/fuji-iot):** library for Fuji Electric / Fujitsu units
+- **[FujiHeatPump/esphome-fujitsu](https://github.com/FujiHeatPump/esphome-fujitsu):** the original ESPHome custom component
+- **[Hackaday: Frederic Germain and Myles Eftos (2017)](https://hackaday.io/project/19473-reverse-engineering-a-fujitsu-air-conditioner-unit):** the first reverse engineering of the Fujitsu LIN bus protocol
 
-### B. Defrost / oil-recovery active flag — shipped, validation open
-- [x] **B1–B3.** Bit identified (byte 2 bit 3 of the frame not addressed to us) and exposed as `binary_sensor` "Defrost Active" (fw 4A.10, 3 s debounce), from one live cycle on 17 Oct 2026. A `hvac_action: defrosting` mapping is not done.
-- [ ] **B4.** Validate on a second cold cycle; check whether Oil Recovery also sets the bit.
-- [ ] **B5.** Use the flag in RoomMind (exclude defrost plus a ~2 min hold-off from learning and control).
-
-### C. Other
-- API/WiFi link drops (five brief `unavailable` events in two days) not yet root-caused.
-- RoomMind short-cycling (4–8 minute runs observed 1–2 Oct); five rooms share the single climate entity.
-- Swing Icon reads On while the unit is off/standby (the wired remote hides the icon then); cause not investigated.
-- Possible tidy-ups: move Sync Mismatch / Out of Sync Since to Diagnostic; make Restart a button instead of a switch.
-- The local web page cannot follow the HA Controls / Sensors / Diagnostic grouping while on `web_server` version 2.
-
----
-
-## Credits & References
-
-This project stands on the shoulders of:
-
-- **[Myles Eftos / unreality](https://github.com/unreality/FujiHeatPump)** - Arduino library for Fujitsu heat pumps, protocol reverse engineering
-- **[jaroslawprzybylowicz/fuji-iot](https://github.com/jaroslawprzybylowicz/fuji-iot)** - Library for Fuji Electric / Fujitsu AC units, Raspberry Pi implementation
-- **[FujiHeatPump/esphome-fujitsu](https://github.com/FujiHeatPump/esphome-fujitsu)** - Original ESPHome custom component
-- **[Hackaday: Frederic Germain & Myles Eftos (2017)](https://hackaday.io/project/19473-reverse-engineering-a-fujitsu-air-conditioner-unit)** - Original reverse engineering of the Fujitsu LIN bus protocol
-
-These target different unit families with different frame markers to the ART30LUAK, so
-their code isn't a byte-for-byte drop-in — but their field layout, after correcting for
-this unit's byte inversion and frame sync offset, turned out to match exactly, and is what
-this project's fan-speed and room-temperature decode (and the vendored transmit engine) are
-actually built on. See Protocol above.
-
----
+Development was done with a lot of help from [Claude](https://claude.ai) (Anthropic).
 
 ## Contributing
 
-If you have a similar Fujitsu unit and this works (or doesn't work) for you, please open an
-issue or pull request with:
-- Your indoor/outdoor unit model numbers
-- Your wired controller model
-- What worked or what needed changing
+If you try this on another unit, please open an issue with:
 
-This will help build a compatibility list for other users!
+- your indoor and outdoor unit model numbers and your wired controller model
+- a photo of the wired controller, and of the controller's terminals if you can
+- the ESP32 board and ESPHome version you used
+- whether *Bus Status* reached **Bus OK**, and what worked or needed changing
 
----
+That is how a compatibility list gets built.
 
 ## Licence
 
-Apache 2.0 - see [LICENSE](LICENSE)
-
----
+Apache 2.0. See [LICENSE](LICENSE).
 
 ## Disclaimer
 
-This project involves opening electrical equipment and making connections to control
-boards. Do this at your own risk. Always turn off power at the breaker before working on
-the unit. This project is not affiliated with or endorsed by Fujitsu.
+This project involves connecting to the control wiring of electrical equipment. Do it at your own risk,
+and always turn off power at the breaker before working on the unit. It is not affiliated with or
+endorsed by Fujitsu.

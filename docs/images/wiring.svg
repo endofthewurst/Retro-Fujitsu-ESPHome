@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 700" width="960" height="700" font-family="Arial, Helvetica, sans-serif">
+  <title>Wiring: heat pump bus to LINTTL3 LIN module to ESP32</title>
+  <desc>The 3-wire bus (LIN data, +12 V, ground) goes to a LINTTL3 LIN module. The module's TX and RX go to ESP32 GPIO16 (RX2) and GPIO17 (TX2). A 12 V to USB module powers the ESP32 from the same 12 V. All grounds are common.</desc>
+  <rect width="960" height="700" fill="#ffffff"/>
+
+  <text x="480" y="34" text-anchor="middle" font-size="22" font-weight="bold" fill="#111">Wiring: heat pump bus &#8594; LINTTL3 &#8594; ESP32</text>
+  <text x="480" y="58" text-anchor="middle" font-size="14" fill="#b00020">Low voltage only (about 12 V). Turn the heat pump off at the breaker before opening anything.</text>
+
+  <!-- Heat pump bus block -->
+  <rect x="30" y="110" width="220" height="300" rx="10" fill="#f3f3f3" stroke="#444" stroke-width="2"/>
+  <text x="140" y="140" text-anchor="middle" font-size="16" font-weight="bold" fill="#111">Heat pump bus</text>
+  <text x="140" y="160" text-anchor="middle" font-size="12" fill="#333">3-wire cable between the wired</text>
+  <text x="140" y="175" text-anchor="middle" font-size="12" fill="#333">controller and the indoor unit</text>
+  <text x="62" y="195" font-size="14" fill="#111">LIN data</text>
+  <text x="62" y="275" font-size="14" fill="#111">+12 V</text>
+  <text x="62" y="355" font-size="14" fill="#111">GND</text>
+  <text x="140" y="395" text-anchor="middle" font-size="12" fill="#333">the wired controller stays connected</text>
+
+  <!-- LINTTL3 block -->
+  <rect x="380" y="130" width="180" height="300" rx="10" fill="#eef5ff" stroke="#444" stroke-width="2"/>
+  <text x="470" y="160" text-anchor="middle" font-size="16" font-weight="bold" fill="#111">LINTTL3</text>
+  <text x="470" y="178" text-anchor="middle" font-size="12" fill="#333">LIN module (TJA1021)</text>
+  <text x="392" y="195" font-size="14" fill="#111">LIN</text>
+  <text x="392" y="275" font-size="14" fill="#111">VIN</text>
+  <text x="392" y="355" font-size="14" fill="#111">GND</text>
+  <text x="548" y="195" text-anchor="end" font-size="14" fill="#111">TX</text>
+  <text x="548" y="275" text-anchor="end" font-size="14" fill="#111">RX</text>
+  <text x="548" y="355" text-anchor="end" font-size="14" fill="#111">GND</text>
+  <text x="470" y="400" text-anchor="middle" font-size="12" fill="#b00020">SLP, INH: unconnected</text>
+
+  <!-- ESP32 block -->
+  <rect x="700" y="110" width="220" height="320" rx="10" fill="#effaf0" stroke="#444" stroke-width="2"/>
+  <text x="810" y="140" text-anchor="middle" font-size="16" font-weight="bold" fill="#111">ESP32 dev board</text>
+  <text x="810" y="160" text-anchor="middle" font-size="12" fill="#333">classic ESP32 (ESP32-WROOM-32)</text>
+  <text x="712" y="195" font-size="14" fill="#111">GPIO16 (RX2)</text>
+  <text x="712" y="275" font-size="14" fill="#111">GPIO17 (TX2)</text>
+  <text x="712" y="355" font-size="14" fill="#111">GND</text>
+  <rect x="780" y="430" width="60" height="16" rx="3" fill="#888" stroke="#444" stroke-width="1.5"/>
+  <text x="810" y="418" text-anchor="middle" font-size="12" fill="#333">USB (power)</text>
+
+  <!-- Power module block -->
+  <rect x="340" y="480" width="170" height="90" rx="10" fill="#fff8e6" stroke="#444" stroke-width="2"/>
+  <text x="425" y="512" text-anchor="middle" font-size="14" font-weight="bold" fill="#111">12 V to USB</text>
+  <text x="425" y="529" text-anchor="middle" font-size="12" fill="#333">power module</text>
+  <text x="352" y="505" font-size="12" fill="#111">IN +</text>
+  <text x="352" y="560" font-size="12" fill="#111">IN &#8722;</text>
+  <text x="498" y="549" text-anchor="end" font-size="12" fill="#111">USB out</text>
+
+  <!-- Wires: bus to module (LIN data yellow, +12 V red, GND black) -->
+  <line x1="250" y1="190" x2="380" y2="190" stroke="#d4a800" stroke-width="5" stroke-linecap="round"/>
+  <line x1="250" y1="270" x2="380" y2="270" stroke="#d32f2f" stroke-width="5" stroke-linecap="round"/>
+  <path d="M250,350 H312 a8,8 0 0 1 16,0 H380" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Branches to the power module -->
+  <path d="M320,270 V500 H340" fill="none" stroke="#d32f2f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M290,350 V550 H340" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="320" cy="270" r="6" fill="#d32f2f"/>
+  <circle cx="290" cy="350" r="6" fill="#222"/>
+
+  <!-- UART wires: module to ESP32 -->
+  <line x1="560" y1="190" x2="700" y2="190" stroke="#1565c0" stroke-width="5" stroke-linecap="round"/>
+  <line x1="560" y1="270" x2="700" y2="270" stroke="#2e7d32" stroke-width="5" stroke-linecap="round"/>
+  <line x1="560" y1="350" x2="700" y2="350" stroke="#222" stroke-width="5" stroke-linecap="round"/>
+  <text x="630" y="180" text-anchor="middle" font-size="12" fill="#1565c0">module TX &#8594; ESP32 RX</text>
+  <text x="630" y="260" text-anchor="middle" font-size="12" fill="#2e7d32">ESP32 TX &#8594; module RX</text>
+  <text x="630" y="340" text-anchor="middle" font-size="12" fill="#333">common ground</text>
+
+  <!-- USB power wire -->
+  <path d="M510,545 H810 V446" fill="none" stroke="#666" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 9"/>
+  <text x="660" y="535" text-anchor="middle" font-size="12" fill="#444">USB cable from the power module</text>
+
+  <!-- Pins -->
+  <g fill="#fff" stroke="#111" stroke-width="2">
+    <circle cx="250" cy="190" r="6"/><circle cx="250" cy="270" r="6"/><circle cx="250" cy="350" r="6"/>
+    <circle cx="380" cy="190" r="6"/><circle cx="380" cy="270" r="6"/><circle cx="380" cy="350" r="6"/>
+    <circle cx="560" cy="190" r="6"/><circle cx="560" cy="270" r="6"/><circle cx="560" cy="350" r="6"/>
+    <circle cx="700" cy="190" r="6"/><circle cx="700" cy="270" r="6"/><circle cx="700" cy="350" r="6"/>
+    <circle cx="340" cy="500" r="6"/><circle cx="340" cy="550" r="6"/><circle cx="510" cy="545" r="6"/>
+  </g>
+
+  <!-- Notes -->
+  <text x="30" y="612" font-size="13" fill="#111">&#8226; TX/RX labels on LIN modules are from the module's side, so module TX goes to the ESP32's RX pin (GPIO16).</text>
+  <text x="44" y="632" font-size="13" fill="#111">If Bus Status says there is no signal, swap the two data wires.</text>
+  <text x="30" y="654" font-size="13" fill="#111">&#8226; Heat pump GND, module GND and ESP32 GND must all be common. Identify the wires with a multimeter first (see the README).</text>
+  <text x="30" y="676" font-size="13" fill="#111">&#8226; The ESP32 is powered only from the USB module; no external pull-up is needed on GPIO16 (the firmware enables it).</text>
+</svg>
