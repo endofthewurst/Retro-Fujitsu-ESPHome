@@ -7,7 +7,7 @@ Developed and tested against a **~2010-era Fujitsu ART30LUAK (RSG series)** heat
 its LIN bus interface, with the ESP32 joining as a **secondary (slave) controller** alongside
 the existing wired remote (Fujitsu **AR-3TA3 / UTB-TUB** — see correction note below).
 
-**Current status — release candidate 4A.12b-rc1 (28 Oct 2026):** decoding the bus is working
+**Current status — release candidate 4A.13-rc1 (3 Nov 2026):** decoding the bus is working
 and solid, and control from Home Assistant (power, mode, target temperature, fan speed, Economy)
 has been confirmed live against the real unit, gated behind the "Aircon Control Enabled" switch.
 The transmit path is younger than decode — see [Protocol](#protocol) and
@@ -545,7 +545,7 @@ the bus, given transmit is still experimental.
   bytes to the code ~31 ms sooner than 2.x did, so replies went out ~31 ms early and the
   wired controller reverted HA's changes ~0.8 s later; a 31 ms reply gap restores the old
   behaviour (verified on hardware). Added `quiet_fan_mode` (default off). The last
-  ESPHome 2025.4.2 commit is tagged `esphome-2025.4.2`.
+  ESPHome 2025.4.2 commit is tagged `esphome-2025.4.2`. Release candidate **4A.13-rc1**.
 
 The transmit path is live and has been exercised successfully for several fields (see
 Climate Controls above), but hasn't been through the same volume of testing as decode —
