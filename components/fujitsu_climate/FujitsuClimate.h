@@ -88,6 +88,7 @@ class FujitsuClimate : public climate::Climate, public Component {
   // (hardware-and-protocol.md): GPIO16 = RX (from the LIN3TL transceiver), GPIO17 = TX.
   void set_rx_pin(int pin) { rx_pin_ = pin; }
   void set_tx_pin(int pin) { tx_pin_ = pin; }
+  void set_quiet_fan_mode(bool enabled) { quiet_fan_mode_ = enabled; }
 
   // Kill switch (added for this rebuild) -- hardware-and-protocol.md's "ESP32 is
   // never the boss" design principle calls for exactly this: a way to put the system
@@ -150,6 +151,7 @@ class FujitsuClimate : public climate::Climate, public Component {
   bool control_enabled_{false};
   int rx_pin_{16};
   int tx_pin_{17};
+  bool quiet_fan_mode_{false};  // advertise Quiet to HA (off by default; unit-dependent)
 
   binary_sensor::BinarySensor *bus_alive_binary_sensor_{nullptr};
   text_sensor::TextSensor *bus_status_text_sensor_{nullptr};

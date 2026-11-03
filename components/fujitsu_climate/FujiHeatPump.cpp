@@ -114,6 +114,19 @@ void FujiHeatPump::sendPendingFrame() {
   // Deviation #1 from upstream: `> 50` replaced with `>= kMinReplyGapMs` (0) -- see
   // FujiHeatPump.h's file-header comment and kMinReplyGapMs's own comment.
   if (pendingFrame && (millis() - lastFrameReceived) >= kMinReplyGapMs) {
+    // Deviation #4 -- see FUJI_REPLY_DELAY_US in FujiHeatPump.h.
+    {
+      const int64_t target = rxDoneUs + FUJI_REPLY_DELAY_US;
+      for (;;) {
+        int64_t remain = target - esp_timer_get_time();
+        if (remain <= 0)
+          break;
+        if (remain > 2000)
+          vTaskDelay(1);
+        else
+          esp_rom_delay_us((uint32_t) remain);
+      }
+    }
     _serial->write(writeBuf, 8);
     _serial->flush();
     pendingFrame = false;
@@ -129,6 +142,7 @@ bool FujiHeatPump::waitForFrame() {
   if (_serial->available()) {
     memset(readBuf, 0, 8);
     int bytesRead = _serial->readBytes(readBuf, 8);
+    rxDoneUs = esp_timer_get_time();
 
     if (bytesRead < 8) {
       // skip incomplete frame

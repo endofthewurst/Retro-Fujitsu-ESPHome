@@ -44,6 +44,20 @@
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include <esp_timer.h>
+#include <esp_rom_sys.h>
+
+// Deviation #4 (ESPHome 2026.x / Arduino-ESP32 3.x): reply gap.
+// Under Arduino-ESP32 2.x (ESPHome 2025.4.x) received bytes reached the application ~31 ms
+// after they finished arriving (UART RX-timeout latency, measured: the TX echo of an 8-byte
+// reply came back ~31 ms after flush() returned). This project's "reply immediately"
+// timing (Deviation #1, kMinReplyGapMs = 0) was tuned with that latency baked in, so replies
+// physically left ~31 ms after the unit's frame ended. Arduino-ESP32 3.x hands bytes over
+// immediately (echo comes back ~50 us after flush()), so the same code replied ~31 ms
+// early: the unit adopted the change, then the wired controller reverted it ~0.8 s later
+// ("Change attributed to Human"). kReplyDelayUs re-creates the old gap, measured from the
+// moment the last byte of the incoming frame was read. Verified on hardware (fan changes).
+#define FUJI_REPLY_DELAY_US 31000
 
 const byte kModeIndex = 3;
 const byte kModeMask = 0b00001110;
@@ -159,6 +173,7 @@ class FujiHeatPump {
   byte lastOtherFrame[8] = {0};
   bool toUsSeen = false;
   bool otherSeen = false;
+  int64_t rxDoneUs = 0;  // esp_timer time when the last incoming frame finished being read
 
   // 4 Oct 2026 (4A.9) -- EXPERIMENTAL, default off. When set, STATUS replies to the
   // unit also carry updateMagic bit 3 (= byte 5 bit 7 on the wire) to test whether the

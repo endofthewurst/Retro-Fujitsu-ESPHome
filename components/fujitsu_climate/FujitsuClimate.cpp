@@ -362,8 +362,12 @@ void FujitsuClimate::update_climate_state_() {
     uint32_t now_ms = millis();
     if (now_ms - this->state_log_last_ms_ >= 1000) {
       this->state_log_last_ms_ = now_ms;
+      // fan_mode/preset are std::optional enums; value_or(-1) no longer compiles on ESPHome 2026.x
+      // (an int is not implicitly convertible to the enum), so convert to int explicitly for the log.
+      const int fan_dbg = this->fan_mode.has_value() ? static_cast<int>(*this->fan_mode) : -1;
+      const int preset_dbg = this->preset.has_value() ? static_cast<int>(*this->preset) : -1;
       ESP_LOGD(TAG, "State updated - mode=%d target=%.0f current=%.0f fan=%d preset=%d", this->mode,
-               this->target_temperature, this->current_temperature, this->fan_mode.value_or(-1), this->preset.value_or(-1));
+               this->target_temperature, this->current_temperature, fan_dbg, preset_dbg);
     }
     this->publish_state();
   }
@@ -671,23 +675,28 @@ climate::ClimateTraits FujitsuClimate::traits() {
 
   traits.set_supported_fan_modes({
       climate::CLIMATE_FAN_AUTO,
-      climate::CLIMATE_FAN_QUIET,
       climate::CLIMATE_FAN_LOW,
       climate::CLIMATE_FAN_MEDIUM,
       climate::CLIMATE_FAN_HIGH,
   });
+  // Quiet is unit-dependent: on the ART30LUAK + UTY-RNNUM it is briefly adopted by the indoor
+  // unit's fan, then the wired controller (which has no Quiet state) overwrites it with High a
+  // second later, leaving the display on High while the fan runs at Low. So it is opt-in.
+  if (this->quiet_fan_mode_) {
+    traits.add_supported_fan_mode(climate::CLIMATE_FAN_QUIET);
+  }
 
   traits.set_supported_presets({
       climate::CLIMATE_PRESET_NONE,
       climate::CLIMATE_PRESET_ECO,
   });
 
-  traits.set_supports_current_temperature(true);
+  // ESPHome 2026.5.0 replaced the set_supports_*() setters with feature flags. Two-point
+  // target temperature is simply not requested (it was already false).
+  traits.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE | climate::CLIMATE_SUPPORTS_ACTION);
   traits.set_visual_min_temperature(16.0f);
   traits.set_visual_max_temperature(30.0f);
   traits.set_visual_temperature_step(1.0f);
-  traits.set_supports_two_point_target_temperature(false);
-  traits.set_supports_action(true);
 
   return traits;
 }
