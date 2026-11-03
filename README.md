@@ -135,15 +135,22 @@ The ESP32 is a **secondary (slave) controller**, and live control is **on by def
 | Power | On / Off | Decoded and control both live-confirmed |
 | Mode | Auto, Cool, Heat, Dry, Fan Only | Decoded and control both live-confirmed |
 | Target Temperature | 16°C – 30°C | Decoded and control both live-confirmed, all modes including HEAT/AUTO |
-| Fan Speed | Auto, Quiet, Low, Medium, High | Decoded and live-confirmed (Quiet inferred); exposed via a dedicated select entity |
+| Fan Speed | Auto, Low, Medium, High (Quiet optional, off by default) | Decoded and live-confirmed; exposed via a dedicated select entity |
 | Economy | On / Off | Decoded and control both live-confirmed, both as a climate preset and a standalone switch |
+
+> **Quiet fan speed is off by default.** On the ART30LUAK + UTY-RNNUM it does not work: the
+> indoor unit briefly obeys it, then the wired controller (which has no Quiet state) overwrites
+> it with High a second later, so the display shows High while the fan runs at Low. Quiet also
+> cannot be selected from the wired remote. If your unit supports Quiet, set
+> `quiet_fan_mode: true` on the `climate:` block in `retrofujitsu.yaml` and add `- "Quiet"` to
+> the Fan Speed select.
 
 ### Sensors
 | Sensor | Description | Status |
 |--------|-------------|--------|
 | Target Temperature | Current setpoint | Working, all modes including HEAT/AUTO |
 | Current Temperature | Room temperature (wired controller's own thermistor) | Working — see Protocol |
-| Fan Speed | Auto/Quiet/Low/Medium/High | Working (Quiet inferred, not independently tested) |
+| Fan Speed | Auto/Low/Medium/High (Quiet optional) | Working |
 | Economy | On/Off | Working, decoded and controllable |
 | Thermo Sensor Icon | Wired controller is using its own sensor | Working, live-confirmed 28 Oct 2026; read-only (two-way control is a future task) |
 | Swing Icon | Wired remote's swing icon (On/Off) | Working while the unit is running; reads On when off/standby (known quirk) |
@@ -334,15 +341,20 @@ sync markers, etc. are still accurate).
 ## Software Setup
 
 ### Prerequisites
-- [ESPHome](https://esphome.io/) **2025.4.2**, installed on Windows via pip: `pip install esphome==2025.4.2`
+- [ESPHome](https://esphome.io/) **2026.x**, tested on **2026.10.1**, installed on Windows via pip: `pip install esphome==2026.10.1`
 - [Git](https://git-scm.com/download/win) installed
 - Home Assistant with the ESPHome integration
 
-> **Newer ESPHome versions are not supported yet.** This project is built and tested on
-> ESPHome 2025.4.2. On ESPHome 2026.x the component fails to load (see issue #3). The
-> loading and compile errors can be fixed, but on real hardware the heat pump did not
-> accept control commands from the 2026.x build (reading the bus still worked), so
-> there is no 2026.x release yet. Please pin 2025.4.2 until that's resolved.
+> **ESPHome versions.** This version is built and tested on ESPHome **2026.10.1**. ESPHome
+> removes APIs often (that is what broke issue #3), so pin the tested version rather than
+> using the latest. Other 2026.x releases are untested; 2026.5.0 or newer is expected to be
+> needed. If you are on **ESPHome 2025.4.2**, use the tag `esphome-2025.4.2` instead
+> (`git checkout esphome-2025.4.2`).
+>
+> **Windows:** enable long paths before the first build (`LongPathsEnabled` = 1 under
+> `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, then reboot). The ESP-IDF toolchain
+> ESPHome 2026.x downloads has paths longer than 260 characters, and without this the build
+> fails with cryptic errors. The first build downloads a few GB.
 
 ### Installation
 
@@ -528,6 +540,12 @@ the bus, given transmit is still experimental.
   Diagnostic (nothing left in "Configuration"). Thermo Sensor Icon live-confirmed; the Swing
   sensor was tested against the wired remote, renamed "Swing Icon" and moved to Sensors.
   Release candidate **4A.12b-rc1**.
+- **3 Nov 2026** — Ported to ESPHome 2026.x (issue #3, reported by a user): `climate_schema()`
+  and feature-flag API changes, plus a reply-timing fix. Arduino-ESP32 3.x hands received
+  bytes to the code ~31 ms sooner than 2.x did, so replies went out ~31 ms early and the
+  wired controller reverted HA's changes ~0.8 s later; a 31 ms reply gap restores the old
+  behaviour (verified on hardware). Added `quiet_fan_mode` (default off). The last
+  ESPHome 2025.4.2 commit is tagged `esphome-2025.4.2`.
 
 The transmit path is live and has been exercised successfully for several fields (see
 Climate Controls above), but hasn't been through the same volume of testing as decode —
