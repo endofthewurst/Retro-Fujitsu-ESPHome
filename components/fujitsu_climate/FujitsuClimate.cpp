@@ -679,7 +679,7 @@ climate::ClimateTraits FujitsuClimate::traits() {
       climate::CLIMATE_FAN_MEDIUM,
       climate::CLIMATE_FAN_HIGH,
   });
-  // Quiet is unit-dependent: on the ART30LUAK + UTY-RNNUM it is briefly adopted by the indoor
+  // Quiet is unit-dependent: on the ART30LUAK + AR-3TA3/UTB-TUB it is briefly adopted by the indoor
   // unit's fan, then the wired controller (which has no Quiet state) overwrites it with High a
   // second later, leaving the display on High while the fan runs at Low. So it is opt-in.
   if (this->quiet_fan_mode_) {

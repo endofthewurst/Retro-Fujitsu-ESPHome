@@ -126,7 +126,7 @@ climate:
     id: fujitsu_hp
     rx_pin: 16
     tx_pin: 17
-    # Quiet fan speed is hidden from Home Assistant by default: the ART30LUAK/UTY-RNNUM does not
+    # Quiet fan speed is hidden from Home Assistant by default: the ART30LUAK/AR-3TA3 combination does not
     # support it (HA's Quiet registers briefly, then the wired controller reverts it to High while
     # the fan keeps running at Low). Set true if your indoor unit supports Quiet.
     quiet_fan_mode: false
